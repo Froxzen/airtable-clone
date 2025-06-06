@@ -10,7 +10,7 @@ const Home: NextPage = () => {
 
   useEffect(() => {
     if (session) {
-      router.push("/dashboard");
+      void router.push("/dashboard");
     }
   }, [session, router]);
 
