@@ -2,7 +2,7 @@ import { type NextPage } from "next";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import { useEffect } from "react";
-import Homepage from "src/components/HomePage";
+import Homepage from "~/pages/HomePage";
 
 const Home: NextPage = () => {
   const { data: session, status } = useSession();
