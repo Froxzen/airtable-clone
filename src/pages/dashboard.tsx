@@ -2,6 +2,7 @@ import { type NextPage } from "next";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/router";
 import { useEffect } from "react";
+import Image from "next/image";
 
 const Dashboard: NextPage = () => {
   const { data: session, status } = useSession();
@@ -9,7 +10,7 @@ const Dashboard: NextPage = () => {
 
   useEffect(() => {
     if (status !== "loading" && !session) {
-      router.push("/");
+      void router.push("/");
     }
   }, [session, status, router]);
 
@@ -25,7 +26,7 @@ const Dashboard: NextPage = () => {
   }
 
   if (!session) {
-    return null; // Will redirect to home
+    return null;
   }
 
   return (
@@ -36,7 +37,13 @@ const Dashboard: NextPage = () => {
           <div className="flex h-16 items-center justify-between">
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
-                <img src="/logo.svg" alt="Logo" className="h-8 w-8" />
+                <Image
+                  src="/logo.svg"
+                  alt="Logo"
+                  className="h-8 w-8"
+                  width={32}
+                  height={32}
+                />
                 <span className="text-xl font-semibold text-gray-900">
                   Airtable
                 </span>
@@ -46,10 +53,12 @@ const Dashboard: NextPage = () => {
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
                 {session.user?.image && (
-                  <img
+                  <Image
                     src={session.user.image}
                     alt="Profile"
                     className="h-8 w-8 rounded-full"
+                    width={32}
+                    height={32}
                   />
                 )}
                 <span className="text-sm text-gray-700">
@@ -57,7 +66,9 @@ const Dashboard: NextPage = () => {
                 </span>
               </div>
               <button
-                onClick={() => signOut()}
+                onClick={() => {
+                  void signOut();
+                }}
                 className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
               >
                 Sign out
