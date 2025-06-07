@@ -3,8 +3,8 @@ import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { trpc } from "src/utils/api"; // Adjust path if needed
-import type { Base } from "@prisma/client"; // If you have Prisma types
+import { trpc } from "src/utils/api";
+import type { Base } from "@prisma/client";
 
 const Dashboard: NextPage = () => {
   const { data: session, status } = useSession();
