@@ -23,7 +23,7 @@ const Dashboard: NextPage = () => {
   });
   const createBase = trpc.base.create.useMutation({
     onSuccess: () => {
-      refetch();
+      void refetch();
       setShowModal(false);
       setBaseName("");
     },
@@ -255,7 +255,7 @@ const Dashboard: NextPage = () => {
                     "bg-yellow-600",
                     "bg-pink-600",
                   ];
-                  const color = colors[idx % colors.length];
+                  const color = colors[idx % colors.length] ?? "bg-gray-400";
 
                   return (
                     <div
