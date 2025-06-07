@@ -31,7 +31,27 @@ model Account {
     user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
     @@unique([provider, providerAccountId])
-}
+}import { z } from "zod";
+import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+
+export const baseRouter = createTRPCRouter({
+  getAll: protectedProcedure.query(async ({ ctx }) => {
+    return ctx.prisma.base.findMany({
+      where: { userId: ctx.session.user.id },
+      orderBy: { createdAt: "desc" },
+    });
+  }),
+  create: protectedProcedure
+    .input(z.object({ name: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.prisma.base.create({
+        data: {
+          name: input.name,
+          userId: ctx.session.user.id,
+        },
+      });
+    }),
+});
 
 model Session {
     id           String   @id @default(cuid())
@@ -39,6 +59,14 @@ model Session {
     userId       String
     expires      DateTime
     user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Base {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model User {
@@ -49,6 +77,7 @@ model User {
     image         String?
     accounts      Account[]
     sessions      Session[]
+    bases         Base[]    // Relation field for Base model
 }
 
 model VerificationToken {
