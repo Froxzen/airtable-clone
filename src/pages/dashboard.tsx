@@ -3,15 +3,26 @@ import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import { trpc } from "src/utils/api"; // Adjust path if needed
+import type { Base } from "@prisma/client"; // If you have Prisma types
 
 const Dashboard: NextPage = () => {
   const { data: session, status } = useSession();
   const router = useRouter();
 
-  // Modal and bases state
+  // Modal and base name state
   const [showModal, setShowModal] = useState(false);
   const [baseName, setBaseName] = useState("");
-  const [bases, setBases] = useState<string[]>([]);
+
+  // Fetch bases from backend
+  const { data: bases, refetch } = trpc.base.getAll.useQuery();
+  const createBase = trpc.base.create.useMutation({
+    onSuccess: () => {
+      refetch();
+      setShowModal(false);
+      setBaseName("");
+    },
+  });
 
   useEffect(() => {
     if (status !== "loading" && !session) {
@@ -37,9 +48,7 @@ const Dashboard: NextPage = () => {
   // Handle base creation
   const handleCreateBase = () => {
     if (baseName.trim()) {
-      setBases((prev) => [baseName.trim(), ...prev]);
-      setBaseName("");
-      setShowModal(false);
+      createBase.mutate({ name: baseName.trim() });
     }
   };
 
@@ -181,7 +190,7 @@ const Dashboard: NextPage = () => {
             <h2 className="text-lg font-medium text-gray-900">Recent Bases</h2>
           </div>
           <div className="p-6">
-            {bases.length === 0 ? (
+            {!bases || bases.length === 0 ? (
               <div className="py-12 text-center">
                 <svg
                   className="mx-auto h-12 w-12 text-gray-400"
@@ -225,10 +234,10 @@ const Dashboard: NextPage = () => {
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                {bases.map((base, idx) => {
-                  const initials = base
+                {bases.map((base: Base, idx: number) => {
+                  const initials = base.name
                     .split(" ")
-                    .map((word) => word[0])
+                    .map((word: string) => word[0])
                     .join("")
                     .slice(0, 2)
                     .toUpperCase();
@@ -245,7 +254,7 @@ const Dashboard: NextPage = () => {
 
                   return (
                     <div
-                      key={idx}
+                      key={base.id}
                       className="flex cursor-pointer items-center space-x-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md"
                     >
                       <div
@@ -255,7 +264,7 @@ const Dashboard: NextPage = () => {
                       </div>
                       <div>
                         <div className="text-md font-medium text-gray-900">
-                          {base}
+                          {base.name}
                         </div>
                         <div className="text-sm text-gray-500">Base</div>
                       </div>

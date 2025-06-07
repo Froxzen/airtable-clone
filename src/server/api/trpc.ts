@@ -14,6 +14,13 @@ import superjson from "superjson";
 import { ZodError } from "zod";
 import { getServerAuthSession } from "~/server/auth";
 import { prisma } from "~/server/db";
+import { getServerSession } from "next-auth";
+import { authOptions } from "~/server/auth";
+
+export const createContext = async (opts: CreateNextContextOptions) => {
+  const session = await getServerSession(opts.req, opts.res, authOptions);
+  return { session, prisma };
+};
 
 /**
  * 1. CONTEXT
