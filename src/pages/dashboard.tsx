@@ -15,7 +15,12 @@ const Dashboard: NextPage = () => {
   const [baseName, setBaseName] = useState("");
 
   // Fetch bases from backend
-  const { data: bases, refetch } = trpc.base.getAll.useQuery();
+  const isAuthed = status === "authenticated";
+
+  // Only fetch bases if authenticated
+  const { data: bases, refetch } = trpc.base.getAll.useQuery(undefined, {
+    enabled: isAuthed,
+  });
   const createBase = trpc.base.create.useMutation({
     onSuccess: () => {
       refetch();
