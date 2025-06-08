@@ -286,7 +286,7 @@ const Dashboard: NextPage = () => {
                       className="flex cursor-pointer items-center space-x-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md"
                     >
                       <div
-                        className={`flex h-12 w-12 items-center justify-center rounded-lg text-white ${color}`}
+                        className={`flex h-12 w-12 items-center justify-center rounded-lg text-white ${color ?? "bg-gray-600"}`}
                       >
                         <span className="text-md font-bold">{initials}</span>
                       </div>

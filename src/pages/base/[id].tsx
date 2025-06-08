@@ -4,20 +4,22 @@ import {
   useReactTable,
   getCoreRowModel,
   flexRender,
-  ColumnDef,
+  type ColumnDef,
 } from "@tanstack/react-table";
 import { useSession, signOut } from "next-auth/react";
 import Image from "next/image";
 import { trpc } from "~/utils/api";
 
+type MyColumn = { accessorKey: string; header: string };
+type TableRow = Record<string, string>;
+
 export default function BaseTablePage() {
-	type MyColumn = { accessorKey: string; header: string };
-  const [columns, setColumns] = useState<ColumnDef<any>[]>([
+  const [columns, setColumns] = useState<MyColumn[]>([
     { accessorKey: "col1", header: "Column 1" },
     { accessorKey: "col2", header: "Column 2" },
     { accessorKey: "col3", header: "Column 3" },
   ]);
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<TableRow[]>([]);
 
   const handleAddColumn = () => {
     const newColNum = columns.length + 1;
@@ -31,11 +33,9 @@ export default function BaseTablePage() {
   };
 
   const handleAddRow = () => {
-    // Create an empty row with keys for each column
-    const newRow: any = {};
+    const newRow: TableRow = {};
     columns.forEach((col) => {
-      const key = (col as { accessorKey: string }).accessorKey;
-      newRow[key] = "";
+      newRow[col.accessorKey] = "";
     });
     setData([...data, newRow]);
   };
