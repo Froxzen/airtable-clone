@@ -240,7 +240,7 @@ const Dashboard: NextPage = () => {
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                {bases.map((base: Base, idx: number) => {
+                {bases.map((base: Base, _idx: number) => {
                   const initials = base.name
                     .split(" ")
                     .map((word: string) => word[0])
@@ -282,7 +282,7 @@ const Dashboard: NextPage = () => {
                   return (
                     <Link
                       key={base.id}
-                      href={`/base/${base.id}`}
+                      href={`/base/${base.id ?? ""}`}
                       className="flex cursor-pointer items-center space-x-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md"
                     >
                       <div

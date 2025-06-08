@@ -11,6 +11,7 @@ import Image from "next/image";
 import { trpc } from "~/utils/api";
 
 export default function BaseTablePage() {
+	type MyColumn = { accessorKey: string; header: string };
   const [columns, setColumns] = useState<ColumnDef<any>[]>([
     { accessorKey: "col1", header: "Column 1" },
     { accessorKey: "col2", header: "Column 2" },
