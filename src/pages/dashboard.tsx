@@ -87,7 +87,7 @@ const Dashboard: NextPage = () => {
               <button
                 className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
                 onClick={handleCreateBase}
-                disabled={!baseName.trim() || createBase.isLoading} // BUG FIXED HERE!
+                disabled={!baseName.trim() || createBase.isLoading}
               >
                 {createBase.isLoading ? "Creating..." : "Create"}
               </button>
@@ -269,16 +269,14 @@ const Dashboard: NextPage = () => {
                     "bg-gray-600",
                   ];
 
-                  // BUG FIXED HERE!
-                  function hashString(str: string) {
+                  function hashString(id: string) {
                     let hash = 0;
-                    for (let i = 0; i < str.length; i++) {
-                      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+                    for (let i = 0; i < id.length; i++) {
+                      hash = id.charCodeAt(i) + ((hash << 5) - hash);
                     }
                     return Math.abs(hash);
                   }
 
-                  // Inside your map:
                   const color = colors[hashString(base.id) % colors.length];
 
                   return (
