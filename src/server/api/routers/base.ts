@@ -8,6 +8,14 @@ export const baseRouter = createTRPCRouter({
       orderBy: { createdAt: "desc" },
     });
   }),
+  getById: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return ctx.prisma.base.findUnique({
+        where: { id: input.id },
+        select: { id: true, name: true },
+      });
+    }),
   create: protectedProcedure
     .input(z.object({ name: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {

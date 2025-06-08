@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import { trpc } from "src/utils/api";
 import type { Base } from "@prisma/client";
+import Link from "next/link";
 
 const Dashboard: NextPage = () => {
   const { data: session, status } = useSession();
@@ -86,9 +87,9 @@ const Dashboard: NextPage = () => {
               <button
                 className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
                 onClick={handleCreateBase}
-                disabled={!baseName.trim()}
+                disabled={!baseName.trim() || createBase.isLoading} // BUG FIXED HERE!
               >
-                Create
+                {createBase.isLoading ? "Creating..." : "Create"}
               </button>
             </div>
           </div>
@@ -254,12 +255,36 @@ const Dashboard: NextPage = () => {
                     "bg-purple-600",
                     "bg-yellow-600",
                     "bg-pink-600",
+                    "bg-indigo-600",
+                    "bg-teal-600",
+                    "bg-orange-600",
+                    "bg-cyan-600",
+                    "bg-lime-600",
+                    "bg-amber-600",
+                    "bg-rose-600",
+                    "bg-fuchsia-600",
+                    "bg-violet-600",
+                    "bg-emerald-600",
+                    "bg-sky-600",
+                    "bg-gray-600",
                   ];
-                  const color = colors[idx % colors.length] ?? "bg-gray-400";
+
+                  // BUG FIXED HERE!
+                  function hashString(str: string) {
+                    let hash = 0;
+                    for (let i = 0; i < str.length; i++) {
+                      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+                    }
+                    return Math.abs(hash);
+                  }
+
+                  // Inside your map:
+                  const color = colors[hashString(base.id) % colors.length];
 
                   return (
-                    <div
+                    <Link
                       key={base.id}
+                      href={`/base/${base.id}`}
                       className="flex cursor-pointer items-center space-x-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md"
                     >
                       <div
@@ -273,7 +298,7 @@ const Dashboard: NextPage = () => {
                         </div>
                         <div className="text-sm text-gray-500">Base</div>
                       </div>
-                    </div>
+                    </Link>
                   );
                 })}
               </div>
