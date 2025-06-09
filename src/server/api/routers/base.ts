@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 
+const tableRowSchema = z.record(z.string());
+
 export const baseRouter = createTRPCRouter({
   getAll: protectedProcedure.query(async ({ ctx }) => {
     return ctx.prisma.base.findMany({
@@ -54,7 +56,12 @@ export const baseRouter = createTRPCRouter({
     }),
 
   addRow: protectedProcedure
-    .input(z.object({ baseId: z.string(), data: z.any() }))
+    .input(
+      z.object({
+        baseId: z.string(),
+        data: tableRowSchema,
+      })
+    )
     .mutation(async ({ ctx, input }) => {
       return ctx.prisma.row.create({
         data: {
