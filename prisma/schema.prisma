@@ -46,7 +46,24 @@ model Base {
   name      String
   createdAt DateTime @default(now())
   userId    String
+  columns Column[]
+  rows    Row[]
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Column {
+  id      String @id @default(cuid())
+  baseId  String
+  name    String
+  order   Int
+  base    Base   @relation(fields: [baseId], references: [id])
+}
+
+model Row {
+  id      String @id @default(cuid())
+  baseId  String
+  data    Json
+  base    Base   @relation(fields: [baseId], references: [id])
 }
 
 model User {

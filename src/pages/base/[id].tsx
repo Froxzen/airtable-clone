@@ -1,5 +1,5 @@
 import { useRouter } from "next/router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -14,35 +14,75 @@ type MyColumn = { accessorKey: string; header: string };
 type TableRow = Record<string, string>;
 
 export default function BaseTablePage() {
-  const [columns, setColumns] = useState<MyColumn[]>([
-    { accessorKey: "col1", header: "Column 1" },
-    { accessorKey: "col2", header: "Column 2" },
-    { accessorKey: "col3", header: "Column 3" },
-  ]);
+  const router = useRouter();
+  const { id } = router.query;
+  const { data: session } = useSession();
+
+  // Fetch table data from backend
+  const { data: tableData, refetch } = trpc.base.getTable.useQuery(
+    { baseId: id as string },
+    { enabled: !!id }
+  );
+
+  // Local state for columns and rows
+  const [columns, setColumns] = useState<MyColumn[]>([]);
   const [data, setData] = useState<TableRow[]>([]);
 
+  // Update local state when backend data changes
+  useEffect(() => {
+    if (tableData) {
+      setColumns(
+        tableData.columns.map((col: any) => ({
+          accessorKey: col.id,
+          header: col.name,
+        }))
+      );
+      setData(tableData.rows.map((row: any) => row.data));
+    }
+  }, [tableData]);
+
+  // Add column (persisted)
+  const addColumn = trpc.base.addColumn.useMutation({
+    onMutate: async (newCol) => {
+      // Optimistically update columns
+      setColumns((prev) => [
+        ...prev,
+        { accessorKey: "optimistic-" + Date.now(), header: newCol.name },
+      ]);
+    },
+    onSuccess: () => {
+      // Refetch to get real column id from backend
+      void refetch();
+    },
+    onError: () => {
+      // Rollback optimistic update if error
+      void refetch();
+    },
+  });
   const handleAddColumn = () => {
-    const newColNum = columns.length + 1;
-    setColumns([
-      ...columns,
-      {
-        accessorKey: `col${newColNum}`,
-        header: `Column ${newColNum}`,
-      },
-    ]);
+    const newColName = `Column ${columns.length + 1}`;
+    addColumn.mutate({
+      baseId: id as string,
+      name: newColName,
+      order: columns.length,
+    });
   };
 
+  // Add row (persisted)
+  const addRow = trpc.base.addRow.useMutation({
+    onSuccess: () => refetch(),
+  });
   const handleAddRow = () => {
     const newRow: TableRow = {};
     columns.forEach((col) => {
       newRow[col.accessorKey] = "";
     });
-    setData([...data, newRow]);
+    addRow.mutate({
+      baseId: id as string,
+      data: newRow,
+    });
   };
 
-  const { data: session } = useSession();
-  const router = useRouter();
-  const { id } = router.query;
   const { data: base } = trpc.base.getById.useQuery(
     { id: id as string },
     { enabled: !!id }

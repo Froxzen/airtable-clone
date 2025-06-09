@@ -26,4 +26,41 @@ export const baseRouter = createTRPCRouter({
         },
       });
     }),
+  getTable: protectedProcedure
+    .input(z.object({ baseId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const columns = await ctx.prisma.column.findMany({
+        where: { baseId: input.baseId },
+        orderBy: { order: "asc" },
+      });
+      const rows = await ctx.prisma.row.findMany({
+        where: { baseId: input.baseId },
+      });
+      return { columns, rows };
+    }),
+
+  addColumn: protectedProcedure
+    .input(
+      z.object({ baseId: z.string(), name: z.string(), order: z.number() })
+    )
+    .mutation(async ({ ctx, input }) => {
+      return ctx.prisma.column.create({
+        data: {
+          baseId: input.baseId,
+          name: input.name,
+          order: input.order,
+        },
+      });
+    }),
+
+  addRow: protectedProcedure
+    .input(z.object({ baseId: z.string(), data: z.any() }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.prisma.row.create({
+        data: {
+          baseId: input.baseId,
+          data: input.data,
+        },
+      });
+    }),
 });
