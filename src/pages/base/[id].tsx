@@ -1,5 +1,5 @@
 import { useRouter } from "next/router";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -28,6 +28,12 @@ export default function BaseTablePage() {
   // Local state for columns and rowsf
   const [columns, setColumns] = useState<MyColumn[]>([]);
   const [data, setData] = useState<TableRow[]>([]);
+
+  const [selectedCell, setSelectedCell] = useState<{
+    row: number;
+    col: number;
+  } | null>(null);
+
 
   // Update local state when backend data changes
   useEffect(() => {
@@ -79,7 +85,7 @@ export default function BaseTablePage() {
       void refetch();
     },
   });
-  
+
   const handleAddRow = () => {
     const newRow: TableRow = {};
     columns.forEach((col) => {
@@ -190,18 +196,27 @@ export default function BaseTablePage() {
                   </td>
                 </tr>
               ) : (
-                table.getRowModel().rows.map((row, i) => (
+                table.getRowModel().rows.map((row, rowIdx) => (
                   <tr
                     key={row.id}
                     className="transition-colors hover:bg-gray-50"
                   >
                     <td className="border-b border-gray-100 px-4 py-3 text-gray-500">
-                      {i + 1}
+                      {rowIdx + 1}
                     </td>
-                    {row.getVisibleCells().map((cell) => (
+                    {row.getVisibleCells().map((cell, colIdx) => (
                       <td
                         key={cell.id}
-                        className="border-b border-gray-100 px-4 py-3"
+                        className={`cursor-pointer border-b border-gray-100 px-4 py-3 ${
+                          selectedCell &&
+                          selectedCell.row === rowIdx &&
+                          selectedCell.col === colIdx
+                            ? "bg-blue-100 ring-2 ring-blue-400"
+                            : ""
+                        }`}
+                        onClick={() =>
+                          setSelectedCell({ row: rowIdx, col: colIdx })
+                        }
                       >
                         {flexRender(
                           cell.column.columnDef.cell,
