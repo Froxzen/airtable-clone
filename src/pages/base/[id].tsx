@@ -4,7 +4,6 @@ import {
   useReactTable,
   getCoreRowModel,
   flexRender,
-  type ColumnDef,
 } from "@tanstack/react-table";
 import { useSession, signOut } from "next-auth/react";
 import Image from "next/image";
@@ -12,6 +11,8 @@ import { trpc } from "~/utils/api";
 
 type MyColumn = { accessorKey: string; header: string };
 type TableRow = Record<string, string>;
+type BackendColumn = { id: string; name: string };
+type BackendRow = { data: TableRow };
 
 export default function BaseTablePage() {
   const router = useRouter();
@@ -24,7 +25,7 @@ export default function BaseTablePage() {
     { enabled: !!id }
   );
 
-  // Local state for columns and rows
+  // Local state for columns and rowsf
   const [columns, setColumns] = useState<MyColumn[]>([]);
   const [data, setData] = useState<TableRow[]>([]);
 
@@ -32,33 +33,31 @@ export default function BaseTablePage() {
   useEffect(() => {
     if (tableData) {
       setColumns(
-        tableData.columns.map((col: any) => ({
+        (tableData.columns as BackendColumn[]).map((col) => ({
           accessorKey: col.id,
           header: col.name,
         }))
       );
-      setData(tableData.rows.map((row: any) => row.data));
+      setData((tableData.rows as BackendRow[]).map((row) => row.data));
     }
   }, [tableData]);
 
   // Add column (persisted)
   const addColumn = trpc.base.addColumn.useMutation({
-    onMutate: async (newCol) => {
-      // Optimistically update columns
+    onMutate: (newCol) => {
       setColumns((prev) => [
         ...prev,
-        { accessorKey: "optimistic-" + Date.now(), header: newCol.name },
+        { accessorKey: `optimistic-${Date.now()}`, header: newCol.name },
       ]);
     },
     onSuccess: () => {
-      // Refetch to get real column id from backend
       void refetch();
     },
     onError: () => {
-      // Rollback optimistic update if error
       void refetch();
     },
   });
+  
   const handleAddColumn = () => {
     const newColName = `Column ${columns.length + 1}`;
     addColumn.mutate({
