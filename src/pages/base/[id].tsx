@@ -69,8 +69,17 @@ export default function BaseTablePage() {
 
   // Add row (persisted)
   const addRow = trpc.base.addRow.useMutation({
-    onSuccess: () => refetch(),
+    onMutate: (newRow) => {
+      setData((prev) => [...prev, newRow.data]);
+    },
+    onSuccess: () => {
+      void refetch();
+    },
+    onError: () => {
+      void refetch();
+    },
   });
+  
   const handleAddRow = () => {
     const newRow: TableRow = {};
     columns.forEach((col) => {
