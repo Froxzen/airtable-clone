@@ -25,7 +25,7 @@ export default function BaseTablePage() {
     { enabled: !!id }
   );
 
-  // Local state for columns and rowsf
+  // Local state for columns and rows
   const [columns, setColumns] = useState<MyColumn[]>([]);
   const [data, setData] = useState<TableRow[]>([]);
 
@@ -33,7 +33,6 @@ export default function BaseTablePage() {
     row: number;
     col: number;
   } | null>(null);
-
 
   // Update local state when backend data changes
   useEffect(() => {
@@ -63,7 +62,7 @@ export default function BaseTablePage() {
       void refetch();
     },
   });
-  
+
   const handleAddColumn = () => {
     const newColName = `Column ${columns.length + 1}`;
     addColumn.mutate({
@@ -156,16 +155,23 @@ export default function BaseTablePage() {
 
       <div className="p-8">
         <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
-          <table className="min-w-full border-separate rounded-lg">
+          <table
+            className="min-w-full border-separate rounded-lg"
+            style={{ tableLayout: "fixed" }}
+          >
             <thead>
               <tr>
-                <th className="rounded-tl-lg border-b border-gray-200 bg-gray-50 px-4 py-3 text-left text-sm font-semibold text-gray-700">
+                <th
+                  className="rounded-tl-lg border-b border-gray-200 bg-gray-50 px-4 py-3 text-left text-sm font-semibold text-gray-700"
+                  style={{ width: "60px" }}
+                >
                   #
                 </th>
                 {table.getHeaderGroups()[0]?.headers?.map((header) => (
                   <th
                     key={header.id}
                     className="border-b border-gray-200 bg-gray-50 px-4 py-3 text-left text-sm font-semibold text-gray-700"
+                    style={{ width: "200px" }}
                   >
                     {flexRender(
                       header.column.columnDef.header,
@@ -204,26 +210,57 @@ export default function BaseTablePage() {
                     <td className="border-b border-gray-100 px-4 py-3 text-gray-500">
                       {rowIdx + 1}
                     </td>
-                    {row.getVisibleCells().map((cell, colIdx) => (
-                      <td
-                        key={cell.id}
-                        className={`cursor-pointer border-b border-gray-100 px-4 py-3 ${
-                          selectedCell &&
-                          selectedCell.row === rowIdx &&
-                          selectedCell.col === colIdx
-                            ? "bg-blue-100 ring-2 ring-blue-400"
-                            : ""
-                        }`}
-                        onClick={() =>
-                          setSelectedCell({ row: rowIdx, col: colIdx })
-                        }
-                      >
-                        {flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext()
-                        )}
-                      </td>
-                    ))}
+                    {row.getVisibleCells().map((cell, colIdx) => {
+                      const colKey = columns[colIdx]?.accessorKey;
+                      const isSelected =
+                        selectedCell &&
+                        selectedCell.row === rowIdx &&
+                        selectedCell.col === colIdx;
+
+                      return (
+                        <td
+                          key={cell.id}
+                          className={`relative cursor-pointer overflow-hidden text-ellipsis whitespace-nowrap border-b border-gray-100 px-4 py-3 ${
+                            isSelected ? "bg-blue-100 ring-2 ring-blue-400" : ""
+                          }`}
+                          onClick={() =>
+                            setSelectedCell({ row: rowIdx, col: colIdx })
+                          }
+                        >
+                          {isSelected ? (
+                            <input
+                              className="absolute inset-0 h-full w-full border-none bg-transparent px-4 py-3 text-inherit outline-none"
+                              autoFocus
+                              value={colKey ? data[rowIdx]?.[colKey] ?? "" : ""}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setData((prev) => {
+                                  const updated = [...prev];
+                                  if (colKey) {
+                                    updated[rowIdx] = {
+                                      ...updated[rowIdx],
+                                      [colKey]: value,
+                                    };
+                                  }
+                                  return updated;
+                                });
+                              }}
+                              onBlur={() => setSelectedCell(null)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === "Tab") {
+                                  setSelectedCell(null);
+                                }
+                              }}
+                            />
+                          ) : (
+                            flexRender(
+                              cell.column.columnDef.cell,
+                              cell.getContext()
+                            )
+                          )}
+                        </td>
+                      );
+                    })}
                     <td />
                   </tr>
                 ))
