@@ -1,5 +1,5 @@
 import { useRouter } from "next/router";
-import React, { useEffect, useState } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -38,6 +38,15 @@ export default function BaseTablePage() {
     row: number;
     col: number;
   } | null>(null);
+
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // Auto-focus wrapper when a cell is selected and not editing
+  useEffect(() => {
+    if (selectedCell && !editingCell && wrapperRef.current) {
+      wrapperRef.current.focus();
+    }
+  }, [selectedCell, editingCell]);
 
   // Update local state when backend data changes
   useEffect(() => {
@@ -160,6 +169,7 @@ export default function BaseTablePage() {
 
       <div className="p-8">
         <div
+          ref={wrapperRef}
           className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm outline-none"
           tabIndex={0}
           onKeyDown={(e) => {
