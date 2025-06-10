@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { faker } from "@faker-js/faker";
 
 const tableRowSchema = z.record(z.string());
 
@@ -21,12 +22,51 @@ export const baseRouter = createTRPCRouter({
   create: protectedProcedure
     .input(z.object({ name: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.base.create({
+      // 1. Create the base
+      const base = await ctx.prisma.base.create({
         data: {
           name: input.name,
           userId: ctx.session.user.id,
         },
       });
+
+      // 2. Create columns
+      const columns = await ctx.prisma.$transaction([
+        ctx.prisma.column.create({
+          data: { name: "Name", baseId: base.id, order: 0 },
+        }),
+        ctx.prisma.column.create({
+          data: { name: "Address", baseId: base.id, order: 1 },
+        }),
+        ctx.prisma.column.create({
+          data: { name: "Phone Number", baseId: base.id, order: 2 },
+        }),
+        ctx.prisma.column.create({
+          data: { name: "Email", baseId: base.id, order: 3 },
+        }),
+      ]);
+
+      // 3. Create 5 rows with faker data
+      const [nameCol, addressCol, phoneCol, emailCol] = columns;
+      const rowsData = Array.from({ length: 5 }).map(() => ({
+        [nameCol.id]: faker.person.fullName(),
+        [addressCol.id]: faker.location.streetAddress(),
+        [phoneCol.id]: faker.phone.number(),
+        [emailCol.id]: faker.internet.email(),
+      }));
+
+      await Promise.all(
+        rowsData.map((row) =>
+          ctx.prisma.row.create({
+            data: {
+              baseId: base.id,
+              data: row,
+            },
+          })
+        )
+      );
+
+      return base;
     }),
   getTable: protectedProcedure
     .input(z.object({ baseId: z.string() }))

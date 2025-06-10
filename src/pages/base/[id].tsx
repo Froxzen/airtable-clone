@@ -34,6 +34,11 @@ export default function BaseTablePage() {
     col: number;
   } | null>(null);
 
+  const [editingCell, setEditingCell] = useState<{
+    row: number;
+    col: number;
+  } | null>(null);
+
   // Update local state when backend data changes
   useEffect(() => {
     if (tableData) {
@@ -154,7 +159,25 @@ export default function BaseTablePage() {
       </header>
 
       <div className="p-8">
-        <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
+        <div
+          className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm outline-none"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (!selectedCell || editingCell) return;
+            const { row, col } = selectedCell;
+            if (e.key === "ArrowRight" && col < columns.length - 1) {
+              setSelectedCell({ row, col: col + 1 });
+            } else if (e.key === "ArrowLeft" && col > 0) {
+              setSelectedCell({ row, col: col - 1 });
+            } else if (e.key === "ArrowDown" && row < data.length - 1) {
+              setSelectedCell({ row: row + 1, col });
+            } else if (e.key === "ArrowUp" && row > 0) {
+              setSelectedCell({ row: row - 1, col });
+            } else if (e.key === "Enter") {
+              setEditingCell({ row, col });
+            }
+          }}
+        >
           <table
             className="min-w-full border-separate rounded-lg"
             style={{ tableLayout: "fixed" }}
@@ -216,6 +239,10 @@ export default function BaseTablePage() {
                         selectedCell &&
                         selectedCell.row === rowIdx &&
                         selectedCell.col === colIdx;
+                      const isEditing =
+                        editingCell &&
+                        editingCell.row === rowIdx &&
+                        editingCell.col === colIdx;
 
                       return (
                         <td
@@ -226,10 +253,14 @@ export default function BaseTablePage() {
                           onClick={() =>
                             setSelectedCell({ row: rowIdx, col: colIdx })
                           }
+                          onDoubleClick={() =>
+                            setEditingCell({ row: rowIdx, col: colIdx })
+                          }
                         >
-                          {isSelected ? (
+                          {isEditing ? (
                             <input
-                              className="absolute inset-0 h-full w-full border-none bg-transparent px-4 py-3 text-inherit outline-none"
+                              className="block h-full w-full border-none bg-transparent text-inherit outline-none"
+                              style={{ padding: 0, margin: 0 }}
                               autoFocus
                               value={colKey ? data[rowIdx]?.[colKey] ?? "" : ""}
                               onChange={(e) => {
@@ -245,10 +276,100 @@ export default function BaseTablePage() {
                                   return updated;
                                 });
                               }}
-                              onBlur={() => setSelectedCell(null)}
                               onKeyDown={(e) => {
+                                const input = e.currentTarget;
+                                const caretPos = input.selectionStart ?? 0;
+                                const valueLength = input.value.length;
                                 if (e.key === "Enter" || e.key === "Tab") {
-                                  setSelectedCell(null);
+                                  e.preventDefault();
+                                  let nextRow = rowIdx;
+                                  let nextCol = colIdx;
+                                  if (e.shiftKey) {
+                                    // Shift+Tab: move left
+                                    if (colIdx > 0) nextCol = colIdx - 1;
+                                    else if (rowIdx > 0) {
+                                      nextRow = rowIdx - 1;
+                                      nextCol = columns.length - 1;
+                                    }
+                                  } else {
+                                    // Tab/Enter: move right
+                                    if (colIdx < columns.length - 1)
+                                      nextCol = colIdx + 1;
+                                    else if (rowIdx < data.length - 1) {
+                                      nextRow = rowIdx + 1;
+                                      nextCol = 0;
+                                    } else {
+                                      setEditingCell(null);
+                                      return;
+                                    }
+                                  }
+                                  setEditingCell({
+                                    row: nextRow,
+                                    col: nextCol,
+                                  });
+                                  setSelectedCell({
+                                    row: nextRow,
+                                    col: nextCol,
+                                  });
+                                } else if (
+                                  e.key === "ArrowLeft" &&
+                                  caretPos === 0
+                                ) {
+                                  if (colIdx > 0) {
+                                    e.preventDefault();
+                                    setEditingCell({
+                                      row: rowIdx,
+                                      col: colIdx - 1,
+                                    });
+                                    setSelectedCell({
+                                      row: rowIdx,
+                                      col: colIdx - 1,
+                                    });
+                                  }
+                                } else if (
+                                  e.key === "ArrowRight" &&
+                                  caretPos === valueLength
+                                ) {
+                                  if (colIdx < columns.length - 1) {
+                                    e.preventDefault();
+                                    setEditingCell({
+                                      row: rowIdx,
+                                      col: colIdx + 1,
+                                    });
+                                    setSelectedCell({
+                                      row: rowIdx,
+                                      col: colIdx + 1,
+                                    });
+                                  }
+                                } else if (e.key === "ArrowUp") {
+                                  if (rowIdx > 0 && caretPos === 0) {
+                                    e.preventDefault();
+                                    setEditingCell({
+                                      row: rowIdx - 1,
+                                      col: colIdx,
+                                    });
+                                    setSelectedCell({
+                                      row: rowIdx - 1,
+                                      col: colIdx,
+                                    });
+                                  }
+                                } else if (e.key === "ArrowDown") {
+                                  if (
+                                    rowIdx < data.length - 1 &&
+                                    caretPos === valueLength
+                                  ) {
+                                    e.preventDefault();
+                                    setEditingCell({
+                                      row: rowIdx + 1,
+                                      col: colIdx,
+                                    });
+                                    setSelectedCell({
+                                      row: rowIdx + 1,
+                                      col: colIdx,
+                                    });
+                                  }
+                                } else if (e.key === "Escape") {
+                                  setEditingCell(null);
                                 }
                               }}
                             />
