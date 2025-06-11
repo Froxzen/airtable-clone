@@ -218,6 +218,7 @@ const AirtableClone = () => {
     colId: string,
     value: string
   ) => {
+    if (rowId.startsWith("temp-row-")) return;
     const key = `${rowId}-${colId}`;
     setLocalCellValues((prev) => ({ ...prev, [key]: value }));
 
@@ -311,6 +312,7 @@ const AirtableClone = () => {
   const handleEditEnd = async () => {
     if (editingCell && base) {
       const row = base.rows[editingCell.row];
+      if (row && row.id.startsWith("temp-row-")) return;
       const col = base.columns[editingCell.col];
       if (row && col) {
         const key = `${row.id}-${col.id}`;
@@ -580,6 +582,7 @@ const AirtableClone = () => {
                           editingCell?.row === rowIdx &&
                           editingCell?.col === colIdx;
                         const value = getCellValue(row, col.id);
+                        const isTempRow = row.id.startsWith("temp-row-");
 
                         return (
                           <td
@@ -596,6 +599,7 @@ const AirtableClone = () => {
                           >
                             {isEditing ? (
                               <input
+                                disabled={isTempRow}
                                 className="absolute inset-0 h-full w-full border-none bg-transparent px-3 py-0 text-sm outline-none"
                                 autoFocus
                                 value={value}
