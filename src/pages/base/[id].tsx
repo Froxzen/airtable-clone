@@ -1,418 +1,650 @@
-import { useRouter } from "next/router";
-import React, { useRef, useEffect, useState } from "react";
-import {
-  useReactTable,
-  getCoreRowModel,
-  flexRender,
-} from "@tanstack/react-table";
-import { useSession, signOut } from "next-auth/react";
-import Image from "next/image";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { trpc } from "~/utils/api";
+import { useRouter } from "next/router";
+import { useSession, signOut } from "next-auth/react";
+import {
+  ChevronDown,
+  Plus,
+  Grid3X3,
+  Calendar,
+  BarChart3,
+  Clock,
+  List,
+  GanttChart,
+  FileText,
+  // Filter,
+  // ArrowUpDown,
+  Eye,
+  Settings,
+  Search,
+} from "lucide-react";
+import Image from "next/image";
 
-type MyColumn = { accessorKey: string; header: string };
-type TableRow = Record<string, string>;
-type BackendColumn = { id: string; name: string };
-type BackendRow = { data: TableRow };
-
-export default function BaseTablePage() {
-  const router = useRouter();
-  const { id } = router.query;
-  const { data: session } = useSession();
-
-  // Fetch table data from backend
-  const { data: tableData, refetch } = trpc.base.getTable.useQuery(
-    { baseId: id as string },
-    { enabled: !!id }
-  );
-
-  // Local state for columns and rows
-  const [columns, setColumns] = useState<MyColumn[]>([]);
-  const [data, setData] = useState<TableRow[]>([]);
-
+const AirtableClone = () => {
   const [selectedCell, setSelectedCell] = useState<{
     row: number;
     col: number;
   } | null>(null);
-
   const [editingCell, setEditingCell] = useState<{
     row: number;
     col: number;
   } | null>(null);
 
+  const { data: session } = useSession();
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  
+  // Add local state for cell values during editing
+  const [localCellValues, setLocalCellValues] = useState<Record<string, string>>({});
+  
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  // Auto-focus wrapper when a cell is selected and not editing
+  const router = useRouter();
+  const baseId = router.query.id as string;
+
+  // Fetch persistent columns and rows from backend
+  const { data: base } = trpc.base.getTable.useQuery(
+    { baseId },
+    { enabled: !!baseId }
+  );
+  const utils = trpc.useUtils();
+
+  // Optimized mutations with proper cache updates
+  const addColumn = trpc.base.addColumn.useMutation({
+    onMutate: async ({ name, order }) => {
+      // Cancel outgoing refetches
+      await utils.base.getTable.cancel({ baseId });
+
+      // Snapshot previous value
+      const previousData = utils.base.getTable.getData({ baseId });
+
+      // Optimistically update cache
+      const tempId = `temp-col-${Date.now()}`;
+      utils.base.getTable.setData({ baseId }, (old) =>
+        old
+          ? {
+              ...old,
+              columns: [...old.columns, { id: tempId, baseId, name, order }],
+            }
+          : old
+      );
+
+      return { previousData, tempId };
+    },
+    onSuccess: (newCol, _, context) => {
+      // Update with real data from server
+      utils.base.getTable.setData({ baseId }, (old) => {
+        if (!old || !context) return old;
+        return {
+          ...old,
+          columns: old.columns.map((col) =>
+            col.id === context.tempId ? newCol : col
+          ),
+        };
+      });
+    },
+    onError: (_, __, context) => {
+      // Rollback on error
+      if (context?.previousData) {
+        utils.base.getTable.setData({ baseId }, context.previousData);
+      }
+    },
+  });
+
+  const addRow = trpc.base.addRow.useMutation({
+    onMutate: async ({ data }) => {
+      await utils.base.getTable.cancel({ baseId });
+
+      const previousData = utils.base.getTable.getData({ baseId });
+
+      // Optimistically update cache
+      const tempId = `temp-row-${Date.now()}`;
+      utils.base.getTable.setData({ baseId }, (old) =>
+        old
+          ? {
+              ...old,
+              rows: [
+                ...old.rows,
+                { id: tempId, baseId, data },
+              ],
+            }
+          : old
+      );
+
+      return { previousData, tempId };
+    },
+    onSuccess: (newRow, _, context) => {
+      utils.base.getTable.setData({ baseId }, (old) => {
+        if (!old || !context) return old;
+        return {
+          ...old,
+          rows: old.rows.map((row) =>
+            row.id === context.tempId ? newRow : row
+          ),
+        };
+      });
+    },
+    onError: (_, __, context) => {
+      if (context?.previousData) {
+        utils.base.getTable.setData({ baseId }, context.previousData);
+      }
+    },
+  });
+
+  const updateRow = trpc.base.updateRow.useMutation({
+    onMutate: async ({ rowId, data }) => {
+      await utils.base.getTable.cancel({ baseId });
+
+      const previousData = utils.base.getTable.getData({ baseId });
+
+      // Optimistically update cache
+      utils.base.getTable.setData({ baseId }, (old) =>
+        old
+          ? {
+              ...old,
+              rows: old.rows.map((row) =>
+                row.id === rowId ? { ...row, data } : row
+              ),
+            }
+          : old
+      );
+
+      return { previousData };
+    },
+    onSuccess: (updatedRow) => {
+      // Server data should match optimistic update, but update anyway
+      utils.base.getTable.setData({ baseId }, (old) =>
+        old
+          ? {
+              ...old,
+              rows: old.rows.map((row) =>
+                row.id === updatedRow.id ? updatedRow : row
+              ),
+            }
+          : old
+      );
+    },
+    onError: (_, __, context) => {
+      if (context?.previousData) {
+        utils.base.getTable.setData({ baseId }, context.previousData);
+      }
+    },
+  });
+
+  // Memoize views to prevent unnecessary re-renders
+  const views = useMemo(
+    () => [
+      { name: "Grid view", icon: Grid3X3, active: true },
+      { name: "Calendar", icon: Calendar },
+      { name: "Gallery", icon: BarChart3 },
+      { name: "Kanban", icon: BarChart3 },
+      { name: "Timeline", icon: Clock, badge: "Team" },
+      { name: "List", icon: List },
+      { name: "Gantt", icon: GanttChart, badge: "Team" },
+      { name: "New Section", badge: "Team" },
+      { name: "Form", icon: FileText },
+    ],
+    []
+  );
+
   useEffect(() => {
     if (selectedCell && !editingCell && wrapperRef.current) {
       wrapperRef.current.focus();
     }
   }, [selectedCell, editingCell]);
 
-  // Update local state when backend data changes
-  useEffect(() => {
-    if (tableData) {
-      setColumns(
-        (tableData.columns as BackendColumn[]).map((col) => ({
-          accessorKey: col.id,
-          header: col.name,
-        }))
-      );
-      setData((tableData.rows as BackendRow[]).map((row) => row.data));
+  // Optimized handlers - no more refetch calls
+  const handleAddColumn = async () => {
+    if (!base) return;
+    await addColumn.mutateAsync({
+      baseId,
+      name: `Column ${base.columns.length + 1}`,
+      order: base.columns.length,
+    });
+    // No refetch needed - optimistic updates handle this
+  };
+
+  const handleAddRow = async () => {
+    if (!base) return;
+    const emptyData = Object.fromEntries(
+      base.columns.map((col) => [col.id, ""])
+    );
+    await addRow.mutateAsync({ baseId, data: emptyData });
+    // No refetch needed - optimistic updates handle this
+  };
+
+  // Debounced cell update to prevent excessive API calls
+  const handleCellValueChange = useMemo(() => {
+    const timeouts = new Map<string, NodeJS.Timeout>();
+
+    return (rowId: string, colId: string, value: string) => {
+      const key = `${rowId}-${colId}`;
+      
+      // Update local state immediately for responsive typing
+      setLocalCellValues(prev => ({ ...prev, [key]: value }));
+
+      // Clear existing timeout for this cell
+      const existingTimeout = timeouts.get(key);
+      if (existingTimeout) {
+        clearTimeout(existingTimeout);
+      }
+
+      // Set new timeout for backend update
+      const timeout = setTimeout(async () => {
+        if (!base) return;
+        const row = base.rows.find((r) => r.id === rowId);
+        if (!row) return;
+
+        const dataObj =
+          row.data && typeof row.data === "object" && row.data !== null
+            ? (row.data as Record<string, unknown>)
+            : {};
+        const newData = { ...dataObj, [colId]: value };
+
+        await updateRow.mutateAsync({ rowId, data: newData });
+        
+        // Clear local state after successful update
+        setLocalCellValues(prev => {
+          const newState = { ...prev };
+          delete newState[key];
+          return newState;
+        });
+        
+        timeouts.delete(key);
+      }, 300); // 300ms debounce
+
+      timeouts.set(key, timeout);
+    };
+  }, [base, updateRow]);
+
+  // Memoize cell value extraction to avoid repeated computation
+  const getCellValue = useMemo(() => {
+    return (row: any, colId: string): string => {
+      const key = `${row.id}-${colId}`;
+      
+      // Return local value if it exists (during editing)
+      if (localCellValues[key] !== undefined) {
+        return localCellValues[key];
+      }
+      
+      // Otherwise return persisted value
+      if (!row.data || typeof row.data !== "object" || row.data === null) {
+        return "";
+      }
+      const value = (row.data as Record<string, unknown>)[colId];
+      return typeof value === "string" || typeof value === "number"
+        ? String(value)
+        : "";
+    };
+  }, [localCellValues]);
+
+  // Cell selection handlers
+  const handleCellClick = (rowIdx: number, colIdx: number) => {
+    setSelectedCell({ row: rowIdx, col: colIdx });
+    setEditingCell(null);
+  };
+
+  const handleCellDoubleClick = (rowIdx: number, colIdx: number) => {
+    setEditingCell({ row: rowIdx, col: colIdx });
+    wrapperRef.current?.blur(); 
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!selectedCell || editingCell || !base) return;
+    const { row, col } = selectedCell;
+
+    switch (e.key) {
+      case "ArrowRight":
+        if (col < base.columns.length - 1)
+          setSelectedCell({ row, col: col + 1 });
+        break;
+      case "ArrowLeft":
+        if (col > 0) setSelectedCell({ row, col: col - 1 });
+        break;
+      case "ArrowDown":
+        if (row < base.rows.length - 1) setSelectedCell({ row: row + 1, col });
+        break;
+      case "ArrowUp":
+        if (row > 0) setSelectedCell({ row: row - 1, col });
+        break;
+      case "Enter":
+        setEditingCell({ row, col });
+        break;
     }
-  }, [tableData]);
-
-  // Add column (persisted)
-  const addColumn = trpc.base.addColumn.useMutation({
-    onMutate: (newCol) => {
-      setColumns((prev) => [
-        ...prev,
-        { accessorKey: `optimistic-${Date.now()}`, header: newCol.name },
-      ]);
-    },
-    onSuccess: () => {
-      void refetch();
-    },
-    onError: () => {
-      void refetch();
-    },
-  });
-
-  const handleAddColumn = () => {
-    const newColName = `Column ${columns.length + 1}`;
-    addColumn.mutate({
-      baseId: id as string,
-      name: newColName,
-      order: columns.length,
-    });
   };
 
-  // Add row (persisted)
-  const addRow = trpc.base.addRow.useMutation({
-    onMutate: (newRow) => {
-      setData((prev) => [...prev, newRow.data]);
-    },
-    onSuccess: () => {
-      void refetch();
-    },
-    onError: () => {
-      void refetch();
-    },
-  });
-
-  const handleAddRow = () => {
-    const newRow: TableRow = {};
-    columns.forEach((col) => {
-      newRow[col.accessorKey] = "";
-    });
-    addRow.mutate({
-      baseId: id as string,
-      data: newRow,
-    });
+  // Handle input change for editing cells
+  const handleInputChange = (rowId: string, colId: string, value: string) => {
+    handleCellValueChange(rowId, colId, value);
   };
 
-  const { data: base } = trpc.base.getById.useQuery(
-    { id: id as string },
-    { enabled: !!id }
-  );
+  // Handle ending edit mode
+  const handleEditEnd = () => {
+    setEditingCell(null);
+  };
 
-  const table = useReactTable({
-    data,
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-  });
-
+  if (session === undefined) {
+    // Session is loading
+    return <div className="p-8 text-gray-500">Loading...</div>;
+  }
+  if (!session) {
+    // Not signed in
+    return (
+      <div className="p-8 text-gray-500">
+        Please sign in to access this page.
+      </div>
+    );
+  }
+  
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="border-b border-gray-200 bg-white shadow-sm">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex h-16 items-center justify-between">
-            <div className="flex items-center">
-              <Image
-                src="/logo.svg"
-                alt="Logo"
-                className="h-8 w-8"
-                width={32}
-                height={32}
-              />
-              <span className="ml-8 text-2xl font-bold text-gray-800">
-                {base?.name ?? "Loading..."}
-              </span>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                {session?.user?.image && (
-                  <Image
-                    src={session.user.image}
-                    alt="Profile"
-                    className="h-8 w-8 rounded-full"
-                    width={32}
-                    height={32}
-                  />
-                )}
-                <span className="text-sm text-gray-700">
-                  {session?.user?.name || session?.user?.email}
-                </span>
-              </div>
+    <div className="flex h-screen flex-col bg-white">
+      {/* Top Header */}
+      <div className="flex h-16 items-center bg-purple-600 px-6 text-sm text-white">
+        <div className="flex items-center space-x-4">
+          <Image
+            src="/logo.svg"
+            alt="Logo"
+            width={24}
+            height={24}
+            className="h-6 w-6"
+            priority
+          />
+          <div className="flex items-center space-x-1">
+            <span>Untitled Base</span>
+          </div>
+        </div>
+        <div className="relative ml-auto flex items-center space-x-4">
+          {/* ...other header items... */}
+          {session?.user?.image && (
+            <div className="relative">
               <button
-                onClick={() => {
-                  void signOut({ callbackUrl: "/" });
-                }}
-                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
+                onClick={() => setShowProfileMenu((v) => !v)}
+                className="focus:outline-none"
               >
-                Sign out
+                <Image
+                  src={session.user.image}
+                  alt="Profile"
+                  width={32}
+                  height={32}
+                  className="h-8 w-8 rounded-full border-2 border-white shadow"
+                />
+              </button>
+              {showProfileMenu && (
+                <div className="absolute right-0 z-50 mt-2 w-40 rounded bg-white py-2 shadow-lg">
+                  <button
+                    onClick={async () => {
+                      await signOut({ redirect: false });
+                      router.push("/");
+                    }}
+                    className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    Sign out
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Secondary Header */}
+      <div className="flex h-12 items-center bg-purple-500 px-4 text-sm text-white">
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-1">
+            <span>Table 1</span>
+            <ChevronDown className="h-4 w-4" />
+          </div>
+          <div className="flex items-center space-x-1 rounded bg-white/20 px-2 py-1">
+            <Plus className="h-4 w-4" />
+            <span>Add or import</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-1">
+        {/* Left Sidebar */}
+        <div className="w-64 border-r border-gray-200 bg-gray-50 p-3">
+          {/* Views Section */}
+          <div className="mb-16">
+            <div className="mb-3 flex items-center space-x-2">
+              <Eye className="h-4 w-4 text-gray-500" />
+              <span className="text-sm font-medium text-gray-700">Views</span>
+            </div>
+            <div className="relative mb-3">
+              <Search className="absolute left-2 top-2 h-4 w-4 text-gray-400" />
+              <input
+                placeholder="Find a view"
+                className="w-full rounded border border-gray-200 bg-white py-1.5 pl-8 pr-3 text-sm"
+              />
+              <Settings className="absolute right-2 top-2 h-4 w-4 text-gray-400" />
+            </div>
+            <div className="space-y-1">
+              {views.slice(0, 1).map((view, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center justify-between rounded px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
+                >
+                  <div className="flex items-center space-x-2">
+                    {view.icon && <view.icon className={`h-4 w-4`} />}
+                    <span>{view.name}</span>
+                    {view.badge && (
+                      <span className="rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-600">
+                        {view.badge}
+                      </span>
+                    )}
+                  </div>
+                  <Plus className="h-3 w-3" />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Create Section */}
+          <div>
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-700">
+                Create...
+              </span>
+              <ChevronDown className="h-3 w-3 text-gray-400" />
+            </div>
+            <div className="space-y-1">
+              {views.slice(0, 7).map((view, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center justify-between rounded px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
+                >
+                  <div className="flex items-center space-x-2">
+                    {view.icon && <view.icon className={`h-4 w-4`} />}
+                    <span>{view.name}</span>
+                    {view.badge && (
+                      <span className="rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-600">
+                        {view.badge}
+                      </span>
+                    )}
+                  </div>
+                  <Plus className="h-3 w-3" />
+                </div>
+              ))}
+              <div className="flex items-center justify-between rounded px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm">New section</span>
+                  <span className="rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-600">
+                    Team
+                  </span>
+                </div>
+                <Plus className="h-3 w-3" />
+              </div>
+              <div className="flex items-center justify-between rounded px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
+                <div className="flex items-center space-x-2">
+                  <FileText className="h-4 w-4" />
+                  <span>Form</span>
+                </div>
+                <Plus className="h-3 w-3" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="flex flex-1 flex-col">
+          {/* Toolbar */}
+          {/* <div className="flex h-12 items-center space-x-4 border-b border-gray-200 bg-white px-4">
+            <div className="flex items-center space-x-1 text-sm">
+              <Grid3X3 className="h-4 w-4" />
+              <span>Grid view</span>
+              <ChevronDown className="h-4 w-4" />
+            </div>
+            <div className="flex items-center space-x-1 text-sm">
+              <Eye className="h-4 w-4" />
+              <span>Hide fields</span>
+            </div>
+            <div className="flex items-center space-x-1 text-sm">
+              <Filter className="h-4 w-4" />
+              <span>Filter</span>
+            </div>
+            <div className="flex items-center space-x-1 text-sm">
+              <span>Group</span>
+            </div>
+            <div className="flex items-center space-x-1 text-sm">
+              <ArrowUpDown className="h-4 w-4" />
+              <span>Sort</span>
+            </div>
+            <div className="ml-auto">
+              <Search className="h-4 w-4 text-gray-400" />
+            </div>
+          </div> */}
+
+          {/* Table Container */}
+          <div className="flex-1 overflow-auto">
+            <div
+              ref={wrapperRef}
+              className="outline-none"
+              tabIndex={0}
+              onKeyDown={editingCell ? undefined : handleKeyDown}
+            >
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr>
+                    <th className="h-10 w-12 border-b border-r border-gray-200 bg-gray-50 text-center text-xs font-medium text-gray-500">
+                      #
+                    </th>
+                    {base?.columns?.map((col, idx) => (
+                      <th
+                        key={col.id}
+                        className="relative h-10 min-w-[150px] border-b border-r border-gray-200 bg-gray-50 px-3 text-left text-xs font-medium text-gray-700"
+                      >
+                        <div className="flex items-center space-x-1">
+                          <span>{col.name}</span>
+                          <ChevronDown className="h-3 w-3 text-gray-400" />
+                        </div>
+                      </th>
+                    ))}
+                    <th className="h-10 w-8 border-b border-gray-200 bg-gray-50 text-center">
+                      <button
+                        onClick={handleAddColumn}
+                        disabled={addColumn.isLoading}
+                        className="mx-auto flex h-6 w-6 items-center justify-center rounded text-blue-500 hover:bg-blue-50 disabled:opacity-50"
+                        title="Add column"
+                        type="button"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {base?.rows.map((row, rowIdx) => (
+                    <tr key={row.id} className="hover:bg-gray-50">
+                      <td className="h-10 w-12 border-b border-r border-gray-200 bg-gray-50 text-center text-xs text-gray-500">
+                        {rowIdx + 1}
+                      </td>
+                      {base.columns.map((col, colIdx) => {
+                        const isSelected =
+                          selectedCell?.row === rowIdx &&
+                          selectedCell?.col === colIdx;
+                        const isEditing =
+                          editingCell?.row === rowIdx &&
+                          editingCell?.col === colIdx;
+                        const value = getCellValue(row, col.id);
+
+                        return (
+                          <td
+                            key={col.id}
+                            className={`relative h-10 cursor-pointer border-b border-r border-gray-200 px-3 ${
+                              isSelected
+                                ? "bg-blue-50 ring-2 ring-blue-400"
+                                : ""
+                            }`}
+                            onClick={() => handleCellClick(rowIdx, colIdx)}
+                            onDoubleClick={() =>
+                              handleCellDoubleClick(rowIdx, colIdx)
+                            }
+                          >
+                            {isEditing ? (
+                              <input
+                                className="absolute inset-0 h-full w-full border-none bg-transparent px-3 py-0 text-sm outline-none"
+                                autoFocus
+                                value={value}
+                                onChange={(e) =>
+                                  handleInputChange(
+                                    row.id,
+                                    col.id,
+                                    e.target.value
+                                  )
+                                }
+                                onBlur={handleEditEnd}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === "Escape") {
+                                    handleEditEnd();
+                                  }
+                                }}
+                              />
+                            ) : (
+                              <div className="truncate text-sm text-gray-700">
+                                {value}
+                              </div>
+                            )}
+                          </td>
+                        );
+                      })}
+                      <td className="h-10 w-8 border-b border-gray-200"></td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td
+                      colSpan={(base?.columns?.length ?? 0) + 2}
+                      className="h-10 text-center"
+                    >
+                      <button
+                        onClick={handleAddRow}
+                        disabled={addRow.isLoading}
+                        className="mx-auto flex h-6 w-6 items-center justify-center rounded text-blue-500 hover:bg-blue-50 disabled:opacity-50"
+                        title="Add row"
+                        type="button"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Bottom Status */}
+          <div className="flex h-8 items-center border-t border-gray-200 bg-white px-4">
+            <span className="text-xs text-gray-500">
+              {base?.rows.length} records
+            </span>
+            <div className="ml-auto">
+              <button className="rounded bg-gray-800 px-2 py-1 text-xs text-white">
+                Getting started
               </button>
             </div>
           </div>
         </div>
-      </header>
-
-      <div className="p-8">
-        <div
-          ref={wrapperRef}
-          className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm outline-none"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (!selectedCell || editingCell) return;
-            const { row, col } = selectedCell;
-            if (e.key === "ArrowRight" && col < columns.length - 1) {
-              setSelectedCell({ row, col: col + 1 });
-            } else if (e.key === "ArrowLeft" && col > 0) {
-              setSelectedCell({ row, col: col - 1 });
-            } else if (e.key === "ArrowDown" && row < data.length - 1) {
-              setSelectedCell({ row: row + 1, col });
-            } else if (e.key === "ArrowUp" && row > 0) {
-              setSelectedCell({ row: row - 1, col });
-            } else if (e.key === "Enter") {
-              setEditingCell({ row, col });
-            }
-          }}
-        >
-          <table
-            className="min-w-full border-separate rounded-lg"
-            style={{ tableLayout: "fixed" }}
-          >
-            <thead>
-              <tr>
-                <th
-                  className="rounded-tl-lg border-b border-gray-200 bg-gray-50 px-4 py-3 text-left text-sm font-semibold text-gray-700"
-                  style={{ width: "60px" }}
-                >
-                  #
-                </th>
-                {table.getHeaderGroups()[0]?.headers?.map((header) => (
-                  <th
-                    key={header.id}
-                    className="border-b border-gray-200 bg-gray-50 px-4 py-3 text-left text-sm font-semibold text-gray-700"
-                    style={{ width: "200px" }}
-                  >
-                    {flexRender(
-                      header.column.columnDef.header,
-                      header.getContext()
-                    )}
-                  </th>
-                ))}
-                <th
-                  className="cursor-pointer select-none rounded-tr-lg border-b border-gray-200 bg-gray-50 px-0 py-0 text-center align-middle"
-                  style={{ width: 48, height: 48, minWidth: 48, minHeight: 48 }}
-                  onClick={handleAddColumn}
-                  title="Add column"
-                >
-                  <div className="flex h-12 w-12 items-center justify-center rounded text-lg font-semibold text-blue-600 hover:bg-blue-100">
-                    +
-                  </div>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {table.getRowModel().rows.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={columns.length + 2}
-                    className="bg-gray-50 px-4 py-6 text-center text-gray-400"
-                  >
-                    No rows yet
-                  </td>
-                </tr>
-              ) : (
-                table.getRowModel().rows.map((row, rowIdx) => (
-                  <tr
-                    key={row.id}
-                    className="transition-colors hover:bg-gray-50"
-                  >
-                    <td className="border-b border-gray-100 px-4 py-3 text-gray-500">
-                      {rowIdx + 1}
-                    </td>
-                    {row.getVisibleCells().map((cell, colIdx) => {
-                      const colKey = columns[colIdx]?.accessorKey;
-                      const isSelected =
-                        selectedCell &&
-                        selectedCell.row === rowIdx &&
-                        selectedCell.col === colIdx;
-                      const isEditing =
-                        editingCell &&
-                        editingCell.row === rowIdx &&
-                        editingCell.col === colIdx;
-
-                      return (
-                        <td
-                          key={cell.id}
-                          className={`relative cursor-pointer overflow-hidden text-ellipsis whitespace-nowrap border-b border-gray-100 px-4 py-3 ${
-                            isSelected ? "bg-blue-100 ring-2 ring-blue-400" : ""
-                          }`}
-                          onClick={() =>
-                            setSelectedCell({ row: rowIdx, col: colIdx })
-                          }
-                          onDoubleClick={() =>
-                            setEditingCell({ row: rowIdx, col: colIdx })
-                          }
-                        >
-                          {isEditing ? (
-                            <input
-                              className="block h-full w-full border-none bg-transparent text-inherit outline-none"
-                              style={{ padding: 0, margin: 0 }}
-                              autoFocus
-                              value={colKey ? data[rowIdx]?.[colKey] ?? "" : ""}
-                              onChange={(e) => {
-                                const value = e.target.value;
-                                setData((prev) => {
-                                  const updated = [...prev];
-                                  if (colKey) {
-                                    updated[rowIdx] = {
-                                      ...updated[rowIdx],
-                                      [colKey]: value,
-                                    };
-                                  }
-                                  return updated;
-                                });
-                              }}
-                              onKeyDown={(e) => {
-                                const input = e.currentTarget;
-                                const caretPos = input.selectionStart ?? 0;
-                                const valueLength = input.value.length;
-                                if (e.key === "Enter" || e.key === "Tab") {
-                                  e.preventDefault();
-                                  let nextRow = rowIdx;
-                                  let nextCol = colIdx;
-                                  if (e.shiftKey) {
-                                    // Shift+Tab: move left
-                                    if (colIdx > 0) nextCol = colIdx - 1;
-                                    else if (rowIdx > 0) {
-                                      nextRow = rowIdx - 1;
-                                      nextCol = columns.length - 1;
-                                    }
-                                  } else {
-                                    // Tab/Enter: move right
-                                    if (colIdx < columns.length - 1)
-                                      nextCol = colIdx + 1;
-                                    else if (rowIdx < data.length - 1) {
-                                      nextRow = rowIdx + 1;
-                                      nextCol = 0;
-                                    } else {
-                                      setEditingCell(null);
-                                      return;
-                                    }
-                                  }
-                                  setEditingCell({
-                                    row: nextRow,
-                                    col: nextCol,
-                                  });
-                                  setSelectedCell({
-                                    row: nextRow,
-                                    col: nextCol,
-                                  });
-                                } else if (
-                                  e.key === "ArrowLeft" &&
-                                  caretPos === 0
-                                ) {
-                                  if (colIdx > 0) {
-                                    e.preventDefault();
-                                    setEditingCell({
-                                      row: rowIdx,
-                                      col: colIdx - 1,
-                                    });
-                                    setSelectedCell({
-                                      row: rowIdx,
-                                      col: colIdx - 1,
-                                    });
-                                  }
-                                } else if (
-                                  e.key === "ArrowRight" &&
-                                  caretPos === valueLength
-                                ) {
-                                  if (colIdx < columns.length - 1) {
-                                    e.preventDefault();
-                                    setEditingCell({
-                                      row: rowIdx,
-                                      col: colIdx + 1,
-                                    });
-                                    setSelectedCell({
-                                      row: rowIdx,
-                                      col: colIdx + 1,
-                                    });
-                                  }
-                                } else if (e.key === "ArrowUp") {
-                                  if (rowIdx > 0 && caretPos === 0) {
-                                    e.preventDefault();
-                                    setEditingCell({
-                                      row: rowIdx - 1,
-                                      col: colIdx,
-                                    });
-                                    setSelectedCell({
-                                      row: rowIdx - 1,
-                                      col: colIdx,
-                                    });
-                                  }
-                                } else if (e.key === "ArrowDown") {
-                                  if (
-                                    rowIdx < data.length - 1 &&
-                                    caretPos === valueLength
-                                  ) {
-                                    e.preventDefault();
-                                    setEditingCell({
-                                      row: rowIdx + 1,
-                                      col: colIdx,
-                                    });
-                                    setSelectedCell({
-                                      row: rowIdx + 1,
-                                      col: colIdx,
-                                    });
-                                  }
-                                } else if (e.key === "Escape") {
-                                  setEditingCell(null);
-                                }
-                              }}
-                            />
-                          ) : (
-                            flexRender(
-                              cell.column.columnDef.cell,
-                              cell.getContext()
-                            )
-                          )}
-                        </td>
-                      );
-                    })}
-                    <td />
-                  </tr>
-                ))
-              )}
-              {/* "+" Add Row Button Row */}
-              <tr>
-                <td colSpan={columns.length + 2} className="px-0 py-0">
-                  <div
-                    className="flex h-12 w-full cursor-pointer select-none items-center justify-center rounded-b-lg text-lg font-semibold text-blue-600 hover:bg-blue-100"
-                    style={{ minHeight: 48 }}
-                    onClick={handleAddRow}
-                    title="Add row"
-                  >
-                    +
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
       </div>
     </div>
   );
-}
+};
+
+export default AirtableClone;

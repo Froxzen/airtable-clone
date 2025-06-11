@@ -110,4 +110,12 @@ export const baseRouter = createTRPCRouter({
         },
       });
     }),
+  updateRow: protectedProcedure
+    .input(z.object({ rowId: z.string(), data: z.record(z.string(), z.any()) }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.prisma.row.update({
+        where: { id: input.rowId },
+        data: { data: input.data },
+      });
+    }),
 });
