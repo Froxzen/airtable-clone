@@ -74,7 +74,7 @@ model User {
     image         String?
     accounts      Account[]
     sessions      Session[]
-    bases         Base[]    // Relation field for Base model
+    bases         Base[]
 }
 
 model VerificationToken {

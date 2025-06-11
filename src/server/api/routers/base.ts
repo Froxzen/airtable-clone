@@ -71,6 +71,13 @@ export const baseRouter = createTRPCRouter({
   getTable: protectedProcedure
     .input(z.object({ baseId: z.string() }))
     .query(async ({ ctx, input }) => {
+      const base = await ctx.prisma.base.findUnique({
+        where: { id: input.baseId },
+        select: {
+          id: true,
+          name: true,
+        },
+      });
       const columns = await ctx.prisma.column.findMany({
         where: { baseId: input.baseId },
         orderBy: { order: "asc" },
@@ -78,7 +85,7 @@ export const baseRouter = createTRPCRouter({
       const rows = await ctx.prisma.row.findMany({
         where: { baseId: input.baseId },
       });
-      return { columns, rows };
+      return { ...base, columns, rows };
     }),
 
   addColumn: protectedProcedure

@@ -47,7 +47,7 @@ const AirtableClone = () => {
     { enabled: !!baseId }
   );
   const utils = trpc.useUtils();
-
+  const cellUpdateTimeouts = useRef(new Map<string, NodeJS.Timeout>());
   // Optimized mutations with proper cache updates
   const addColumn = trpc.base.addColumn.useMutation({
     onMutate: async ({ name, order }) => {
@@ -213,48 +213,38 @@ const AirtableClone = () => {
   };
 
   // Debounced cell update to prevent excessive API calls
-  const handleCellValueChange = useMemo(() => {
-    const timeouts = new Map<string, NodeJS.Timeout>();
+  const handleCellValueChange = (
+    rowId: string,
+    colId: string,
+    value: string
+  ) => {
+    const key = `${rowId}-${colId}`;
+    setLocalCellValues((prev) => ({ ...prev, [key]: value }));
 
-    return (rowId: string, colId: string, value: string) => {
-      const key = `${rowId}-${colId}`;
-      
-      // Update local state immediately for responsive typing
-      setLocalCellValues(prev => ({ ...prev, [key]: value }));
+    // Clear existing timeout for this cell
+    const existingTimeout = cellUpdateTimeouts.current.get(key);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+    }
 
-      // Clear existing timeout for this cell
-      const existingTimeout = timeouts.get(key);
-      if (existingTimeout) {
-        clearTimeout(existingTimeout);
-      }
+    // Set new timeout for backend update
+    const timeout = setTimeout(async () => {
+      if (!base) return;
+      const row = base.rows.find((r) => r.id === rowId);
+      if (!row) return;
 
-      // Set new timeout for backend update
-      const timeout = setTimeout(async () => {
-        if (!base) return;
-        const row = base.rows.find((r) => r.id === rowId);
-        if (!row) return;
+      const dataObj =
+        row.data && typeof row.data === "object" && row.data !== null
+          ? (row.data as Record<string, unknown>)
+          : {};
+      const newData = { ...dataObj, [colId]: value };
 
-        const dataObj =
-          row.data && typeof row.data === "object" && row.data !== null
-            ? (row.data as Record<string, unknown>)
-            : {};
-        const newData = { ...dataObj, [colId]: value };
+      await updateRow.mutateAsync({ rowId, data: newData });
+      cellUpdateTimeouts.current.delete(key);
+    }, 300);
 
-        await updateRow.mutateAsync({ rowId, data: newData });
-        
-        // Clear local state after successful update
-        setLocalCellValues(prev => {
-          const newState = { ...prev };
-          delete newState[key];
-          return newState;
-        });
-        
-        timeouts.delete(key);
-      }, 300); // 300ms debounce
-
-      timeouts.set(key, timeout);
-    };
-  }, [base, updateRow]);
+    cellUpdateTimeouts.current.set(key, timeout);
+  };
 
   // Memoize cell value extraction to avoid repeated computation
   const getCellValue = useMemo(() => {
@@ -318,7 +308,31 @@ const AirtableClone = () => {
   };
 
   // Handle ending edit mode
-  const handleEditEnd = () => {
+  const handleEditEnd = async () => {
+    if (editingCell && base) {
+      const row = base.rows[editingCell.row];
+      const col = base.columns[editingCell.col];
+      if (row && col) {
+        const key = `${row.id}-${col.id}`;
+        
+        const existingTimeout = cellUpdateTimeouts.current.get(key);
+        if (existingTimeout) {
+          clearTimeout(existingTimeout);
+          cellUpdateTimeouts.current.delete(key);
+        }
+        
+        if (localCellValues[key] !== undefined) {
+          const value = localCellValues[key];
+          const dataObj =
+            row.data && typeof row.data === "object" && row.data !== null
+              ? (row.data as Record<string, unknown>)
+              : {};
+          const newData = { ...dataObj, [col.id]: value };
+          await updateRow.mutateAsync({ rowId: row.id, data: newData });
+        }
+      }
+    }
+    setLocalCellValues({});
     setEditingCell(null);
   };
 
@@ -349,7 +363,9 @@ const AirtableClone = () => {
             priority
           />
           <div className="flex items-center space-x-1">
-            <span>Untitled Base</span>
+            <span className="text-xl font-bold">
+              {base?.name ?? "Untitled Base"}
+            </span>
           </div>
         </div>
         <div className="relative ml-auto flex items-center space-x-4">
@@ -391,7 +407,6 @@ const AirtableClone = () => {
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-1">
             <span>Table 1</span>
-            <ChevronDown className="h-4 w-4" />
           </div>
           <div className="flex items-center space-x-1 rounded bg-white/20 px-2 py-1">
             <Plus className="h-4 w-4" />
@@ -594,6 +609,7 @@ const AirtableClone = () => {
                                 onBlur={handleEditEnd}
                                 onKeyDown={(e) => {
                                   if (e.key === "Enter" || e.key === "Escape") {
+                                    e.preventDefault();
                                     handleEditEnd();
                                   }
                                 }}
