@@ -20,6 +20,26 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 
+// Define proper types for the data structures
+interface Column {
+  id: string;
+  baseId: string;
+  name: string;
+  order: number;
+}
+
+interface Row {
+  id: string;
+  baseId: string;
+  data: Record<string, unknown>;
+}
+
+interface Base {
+  name: string;
+  columns: Column[];
+  rows: Row[];
+}
+
 const AirtableClone = () => {
   const [selectedCell, setSelectedCell] = useState<{
     row: number;
@@ -32,10 +52,12 @@ const AirtableClone = () => {
 
   const { data: session } = useSession();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
-  
+
   // Add local state for cell values during editing
-  const [localCellValues, setLocalCellValues] = useState<Record<string, string>>({});
-  
+  const [localCellValues, setLocalCellValues] = useState<
+    Record<string, string>
+  >({});
+
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const router = useRouter();
@@ -45,9 +67,11 @@ const AirtableClone = () => {
   const { data: base } = trpc.base.getTable.useQuery(
     { baseId },
     { enabled: !!baseId }
-  );
+  ) as { data: Base | undefined };
+
   const utils = trpc.useUtils();
   const cellUpdateTimeouts = useRef(new Map<string, NodeJS.Timeout>());
+
   // Optimized mutations with proper cache updates
   const addColumn = trpc.base.addColumn.useMutation({
     onMutate: async ({ name, order }) => {
@@ -102,10 +126,7 @@ const AirtableClone = () => {
         old
           ? {
               ...old,
-              rows: [
-                ...old.rows,
-                { id: tempId, baseId, data },
-              ],
+              rows: [...old.rows, { id: tempId, baseId, data }],
             }
           : old
       );
@@ -193,9 +214,9 @@ const AirtableClone = () => {
   }, [selectedCell, editingCell]);
 
   // Optimized handlers - no more refetch calls
-  const handleAddColumn = async () => {
+  const handleAddColumn = () => {
     if (!base) return;
-    await addColumn.mutateAsync({
+    void addColumn.mutateAsync({
       baseId,
       name: `Column ${base.columns.length + 1}`,
       order: base.columns.length,
@@ -203,12 +224,12 @@ const AirtableClone = () => {
     // No refetch needed - optimistic updates handle this
   };
 
-  const handleAddRow = async () => {
+  const handleAddRow = () => {
     if (!base) return;
     const emptyData = Object.fromEntries(
       base.columns.map((col) => [col.id, ""])
     );
-    await addRow.mutateAsync({ baseId, data: emptyData });
+    void addRow.mutateAsync({ baseId, data: emptyData });
     // No refetch needed - optimistic updates handle this
   };
 
@@ -229,18 +250,15 @@ const AirtableClone = () => {
     }
 
     // Set new timeout for backend update
-    const timeout = setTimeout(async () => {
+    const timeout = setTimeout(() => {
       if (!base) return;
       const row = base.rows.find((r) => r.id === rowId);
       if (!row) return;
 
-      const dataObj =
-        row.data && typeof row.data === "object" && row.data !== null
-          ? (row.data as Record<string, unknown>)
-          : {};
+      const dataObj = row.data ?? {};
       const newData = { ...dataObj, [colId]: value };
 
-      await updateRow.mutateAsync({ rowId, data: newData });
+      void updateRow.mutateAsync({ rowId, data: newData });
       cellUpdateTimeouts.current.delete(key);
     }, 300);
 
@@ -249,19 +267,19 @@ const AirtableClone = () => {
 
   // Memoize cell value extraction to avoid repeated computation
   const getCellValue = useMemo(() => {
-    return (row: any, colId: string): string => {
+    return (row: Row, colId: string): string => {
       const key = `${row.id}-${colId}`;
-      
+
       // Return local value if it exists (during editing)
       if (localCellValues[key] !== undefined) {
         return localCellValues[key];
       }
-      
+
       // Otherwise return persisted value
       if (!row.data || typeof row.data !== "object" || row.data === null) {
         return "";
       }
-      const value = (row.data as Record<string, unknown>)[colId];
+      const value = row.data[colId];
       return typeof value === "string" || typeof value === "number"
         ? String(value)
         : "";
@@ -276,7 +294,7 @@ const AirtableClone = () => {
 
   const handleCellDoubleClick = (rowIdx: number, colIdx: number) => {
     setEditingCell({ row: rowIdx, col: colIdx });
-    wrapperRef.current?.blur(); 
+    wrapperRef.current?.blur();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -309,33 +327,37 @@ const AirtableClone = () => {
   };
 
   // Handle ending edit mode
-  const handleEditEnd = async () => {
+  const handleEditEnd = () => {
     if (editingCell && base) {
       const row = base.rows[editingCell.row];
       if (row && row.id.startsWith("temp-row-")) return;
       const col = base.columns[editingCell.col];
       if (row && col) {
         const key = `${row.id}-${col.id}`;
-        
+
         const existingTimeout = cellUpdateTimeouts.current.get(key);
         if (existingTimeout) {
           clearTimeout(existingTimeout);
           cellUpdateTimeouts.current.delete(key);
         }
-        
+
         if (localCellValues[key] !== undefined) {
           const value = localCellValues[key];
-          const dataObj =
-            row.data && typeof row.data === "object" && row.data !== null
-              ? (row.data as Record<string, unknown>)
-              : {};
+          const dataObj = row.data ?? {};
           const newData = { ...dataObj, [col.id]: value };
-          await updateRow.mutateAsync({ rowId: row.id, data: newData });
+          void updateRow.mutateAsync({ rowId: row.id, data: newData });
         }
       }
     }
     setLocalCellValues({});
     setEditingCell(null);
+  };
+
+  // Handle sign out
+  const handleSignOut = () => {
+    void signOut({ redirect: false }).then(() => {
+      void router.push("/");
+    });
   };
 
   if (session === undefined) {
@@ -350,7 +372,7 @@ const AirtableClone = () => {
       </div>
     );
   }
-  
+
   return (
     <div className="flex h-screen flex-col bg-white">
       {/* Top Header */}
@@ -389,10 +411,7 @@ const AirtableClone = () => {
               {showProfileMenu && (
                 <div className="absolute right-0 z-50 mt-2 w-40 rounded bg-white py-2 shadow-lg">
                   <button
-                    onClick={async () => {
-                      await signOut({ redirect: false });
-                      router.push("/");
-                    }}
+                    onClick={handleSignOut}
                     className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
                   >
                     Sign out
@@ -435,9 +454,9 @@ const AirtableClone = () => {
               <Settings className="absolute right-2 top-2 h-4 w-4 text-gray-400" />
             </div>
             <div className="space-y-1">
-              {views.slice(0, 1).map((view, idx) => (
+              {views.slice(0, 1).map((view) => (
                 <div
-                  key={idx}
+                  key={view.name}
                   className="flex items-center justify-between rounded px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
                 >
                   <div className="flex items-center space-x-2">
@@ -464,9 +483,9 @@ const AirtableClone = () => {
               <ChevronDown className="h-3 w-3 text-gray-400" />
             </div>
             <div className="space-y-1">
-              {views.slice(0, 7).map((view, idx) => (
+              {views.slice(0, 7).map((view) => (
                 <div
-                  key={idx}
+                  key={view.name}
                   className="flex items-center justify-between rounded px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
                 >
                   <div className="flex items-center space-x-2">
@@ -503,33 +522,6 @@ const AirtableClone = () => {
 
         {/* Main Content */}
         <div className="flex flex-1 flex-col">
-          {/* Toolbar */}
-          {/* <div className="flex h-12 items-center space-x-4 border-b border-gray-200 bg-white px-4">
-            <div className="flex items-center space-x-1 text-sm">
-              <Grid3X3 className="h-4 w-4" />
-              <span>Grid view</span>
-              <ChevronDown className="h-4 w-4" />
-            </div>
-            <div className="flex items-center space-x-1 text-sm">
-              <Eye className="h-4 w-4" />
-              <span>Hide fields</span>
-            </div>
-            <div className="flex items-center space-x-1 text-sm">
-              <Filter className="h-4 w-4" />
-              <span>Filter</span>
-            </div>
-            <div className="flex items-center space-x-1 text-sm">
-              <span>Group</span>
-            </div>
-            <div className="flex items-center space-x-1 text-sm">
-              <ArrowUpDown className="h-4 w-4" />
-              <span>Sort</span>
-            </div>
-            <div className="ml-auto">
-              <Search className="h-4 w-4 text-gray-400" />
-            </div>
-          </div> */}
-
           {/* Table Container */}
           <div className="flex-1 overflow-auto">
             <div
@@ -544,7 +536,7 @@ const AirtableClone = () => {
                     <th className="h-10 w-12 border-b border-r border-gray-200 bg-gray-50 text-center text-xs font-medium text-gray-500">
                       #
                     </th>
-                    {base?.columns?.map((col, idx) => (
+                    {base?.columns?.map((col) => (
                       <th
                         key={col.id}
                         className="relative h-10 min-w-[150px] border-b border-r border-gray-200 bg-gray-50 px-3 text-left text-xs font-medium text-gray-700"
