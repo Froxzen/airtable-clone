@@ -117,6 +117,42 @@ export const baseRouter = createTRPCRouter({
         },
       });
     }),
+  addManyRows: protectedProcedure
+    .input(
+      z.object({
+        baseId: z.string(),
+        rows: z.array(z.record(z.string(), z.any())),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await ctx.prisma.row.createMany({
+        data: input.rows.map((data) => ({
+          baseId: input.baseId,
+          data,
+        })),
+      });
+      return { success: true };
+    }),
+  getRowsPage: protectedProcedure
+    .input(
+      z.object({
+        baseId: z.string(),
+        offset: z.number(),
+        limit: z.number(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const rows = await ctx.prisma.row.findMany({
+        where: { baseId: input.baseId },
+        skip: input.offset,
+        take: input.limit,
+        orderBy: { id: "asc" },
+      });
+      const total = await ctx.prisma.row.count({
+        where: { baseId: input.baseId },
+      });
+      return { rows, total };
+    }),
   updateRow: protectedProcedure
     .input(z.object({ rowId: z.string(), data: z.record(z.string(), z.any()) }))
     .mutation(async ({ ctx, input }) => {

@@ -12,11 +12,11 @@ import {
   List,
   GanttChart,
   FileText,
-  // Filter,
-  // ArrowUpDown,
-  Eye,
   Settings,
   Search,
+  Filter,
+  SortAsc,
+  Trash2
 } from "lucide-react";
 import Image from "next/image";
 
@@ -56,6 +56,18 @@ const AirtableClone = () => {
   // Add local state for cell values during editing
   const [localCellValues, setLocalCellValues] = useState<
     Record<string, string>
+  >({});
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showTextFilter, setShowTextFilter] = useState(false);
+  const [showNumberFilter, setShowNumberFilter] = useState(false);
+  const [filterConfig, setFilterConfig] = useState<{
+    columnId?: string;
+    type?: string;
+    value?: string;
+  }>({});
+  const [filters, setFilters] = useState<
+    Record<string, { type: string; value: string }>
   >({});
 
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -360,9 +372,56 @@ const AirtableClone = () => {
     });
   };
 
+  // Combine all active filters (from both text and number popups) in your filters state
+  const filteredRows = useMemo(() => {
+    if (!base) return [];
+    return base.rows.filter((row) => {
+      // For each filter applied, check if the row matches
+      return Object.entries(filters).every(([colId, filter]) => {
+        const value = row.data[colId];
+
+        // Text filters
+        if (
+          [
+            "contains",
+            "notContains",
+            "equal",
+            "notEqual",
+            "empty",
+            "notEmpty",
+          ].includes(filter.type)
+        ) {
+          const str = (value ?? "").toString().toLowerCase();
+          const filterVal = (filter.value ?? "").toLowerCase();
+          if (filter.type === "contains") return str.includes(filterVal);
+          if (filter.type === "notContains") return !str.includes(filterVal);
+          if (filter.type === "equal") return str === filterVal;
+          if (filter.type === "notEqual") return str !== filterVal;
+          if (filter.type === "empty") return !str;
+          if (filter.type === "notEmpty") return !!str;
+        }
+
+        // Number filters
+        if (["gt", "lt"].includes(filter.type)) {
+          const num = Number(value);
+          const filterNum = Number(filter.value);
+          if (isNaN(num) || isNaN(filterNum)) return false;
+          if (filter.type === "gt") return num > filterNum;
+          if (filter.type === "lt") return num < filterNum;
+        }
+
+        return true;
+      });
+    });
+  }, [base, filters]);
+
   if (session === undefined) {
     // Session is loading
-    return <div className="p-8 text-gray-500">Loading...</div>;
+    return (
+      <div className="flex h-screen w-screen items-center justify-center">
+        <span className="text-lg font-medium text-gray-500">Loading...</span>
+      </div>
+    );
   }
   if (!session) {
     // Not signed in
@@ -376,7 +435,7 @@ const AirtableClone = () => {
   return (
     <div className="flex h-screen flex-col bg-white">
       {/* Top Header */}
-      <div className="flex h-16 items-center bg-purple-600 px-6 text-sm text-white">
+      <div className="flex h-16 items-center bg-purple-600 px-6 py-4 text-sm text-white">
         <div className="flex items-center space-x-4">
           <Image
             src="/logo.svg"
@@ -431,8 +490,190 @@ const AirtableClone = () => {
           </div>
           <div className="flex items-center space-x-1 rounded bg-white/20 px-2 py-1">
             <Plus className="h-4 w-4" />
-            <span>Add or import</span>
+            <span>Add 100k rows</span>
           </div>
+        </div>
+      </div>
+
+      {/* Controls Row: Filter, Sort, Find */}
+      <div className="flex items-center gap-4 border-b border-gray-200 bg-purple-50 px-4 py-3">
+        <button className="flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-purple-700 shadow hover:bg-gray-100">
+          <SortAsc className="h-4 w-4" />
+          Sort
+        </button>
+        <div className="relative">
+          <button
+            className="flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-purple-700 shadow hover:bg-gray-100"
+            onClick={() => setShowTextFilter((v) => !v)}
+            type="button"
+          >
+            <Filter className="h-4 w-4" />
+            Filter Text
+          </button>
+          {showTextFilter && (
+            <div className="absolute left-0 z-10 mt-2 w-64 rounded border bg-white p-4 shadow-lg">
+              <div className="mb-2 text-xs font-semibold text-gray-700">
+                Where
+              </div>
+              <select
+                className="mb-2 w-full rounded border px-2 py-1 text-xs"
+                value={filterConfig.columnId || ""}
+                onChange={(e) =>
+                  setFilterConfig((f) => ({ ...f, columnId: e.target.value }))
+                }
+              >
+                <option value="">Select column</option>
+                {base?.columns.map((col) => (
+                  <option key={col.id} value={col.id}>
+                    {col.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="mb-2 w-full rounded border px-2 py-1 text-xs"
+                value={filterConfig.type || ""}
+                onChange={(e) =>
+                  setFilterConfig((f) => ({ ...f, type: e.target.value }))
+                }
+              >
+                <option value="">Select condition</option>
+                <option value="contains">Contains</option>
+                <option value="notContains">Not contains</option>
+                <option value="equal">Equal to</option>
+                <option value="notEqual">Not equal to</option>
+                <option value="empty">Is empty</option>
+                <option value="notEmpty">Is not empty</option>
+              </select>
+              {filterConfig.type &&
+                !["empty", "notEmpty"].includes(filterConfig.type) && (
+                  <input
+                    className="mb-2 w-full rounded border px-2 py-1 text-xs"
+                    value={filterConfig.value || ""}
+                    onChange={(e) =>
+                      setFilterConfig((f) => ({ ...f, value: e.target.value }))
+                    }
+                    placeholder="Value"
+                  />
+                )}
+              <button
+                className="w-full rounded bg-purple-500 py-1 text-xs font-semibold text-white hover:bg-purple-600"
+                onClick={() => {
+                  if (filterConfig.columnId && filterConfig.type) {
+                    setFilters((f) => ({
+                      ...f,
+                      [filterConfig.columnId!]: {
+                        type: filterConfig.type!,
+                        value: filterConfig.value || "",
+                      },
+                    }));
+                    setShowTextFilter(false);
+                    setFilterConfig({});
+                  }
+                }}
+              >
+                Apply
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="relative">
+          <button
+            className="flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-purple-700 shadow hover:bg-gray-100"
+            onClick={() => setShowNumberFilter((v) => !v)}
+            type="button"
+          >
+            <Filter className="h-4 w-4" />
+            Filter Number
+          </button>
+
+          {showNumberFilter && (
+            <div className="absolute left-0 z-10 mt-2 w-64 rounded border bg-white p-4 shadow-lg">
+              <div className="mb-2 text-xs font-semibold text-gray-700">
+                Where
+              </div>
+              <select
+                className="mb-2 w-full rounded border px-2 py-1 text-xs"
+                value={filterConfig.columnId || ""}
+                onChange={(e) =>
+                  setFilterConfig((f) => ({ ...f, columnId: e.target.value }))
+                }
+              >
+                <option value="">Select column</option>
+                {base?.columns.map((col) => (
+                  <option key={col.id} value={col.id}>
+                    {col.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="mb-2 w-full rounded border px-2 py-1 text-xs"
+                value={filterConfig.type || ""}
+                onChange={(e) =>
+                  setFilterConfig((f) => ({ ...f, type: e.target.value }))
+                }
+              >
+                <option value="">Select condition</option>
+                <option value="gt">Greater than</option>
+                <option value="lt">Smaller than</option>
+              </select>
+              {filterConfig.type &&
+                !["empty", "notEmpty"].includes(filterConfig.type) && (
+                  <input
+                    className="mb-2 w-full rounded border px-2 py-1 text-xs"
+                    value={filterConfig.value || ""}
+                    onChange={(e) =>
+                      setFilterConfig((f) => ({ ...f, value: e.target.value }))
+                    }
+                    placeholder="Value"
+                  />
+                )}
+              <button
+                className="w-full rounded bg-purple-500 py-1 text-xs font-semibold text-white hover:bg-purple-600"
+                onClick={() => {
+                  if (filterConfig.columnId && filterConfig.type) {
+                    setFilters((f) => ({
+                      ...f,
+                      [filterConfig.columnId!]: {
+                        type: filterConfig.type!,
+                        value: filterConfig.value || "",
+                      },
+                    }));
+                    setShowNumberFilter(false);
+                    setFilterConfig({});
+                  }
+                }}
+              >
+                Apply
+              </button>
+            </div>
+          )}
+        </div>
+        <button
+          className={`ml-2 flex items-center rounded px-2 py-1 ${
+            Object.keys(filters).length > 0
+              ? "cursor-pointer bg-red-100 text-red-600 hover:bg-red-200"
+              : "cursor-not-allowed bg-gray-100 text-gray-400"
+          }`}
+          disabled={Object.keys(filters).length === 0}
+          onClick={() => setFilters({})}
+          title="Clear all filters"
+          type="button"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+
+        <div className="relative ml-auto">
+          <input
+            type="text"
+            placeholder="Find..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="rounded border border-gray-300 px-3 py-1 text-sm text-gray-700 focus:border-purple-400 focus:outline-none"
+          />
+          <span className="absolute right-2 top-2 text-gray-400">
+            <Search className="h-4 w-4" />
+          </span>
         </div>
       </div>
 
@@ -441,10 +682,6 @@ const AirtableClone = () => {
         <div className="w-64 border-r border-gray-200 bg-gray-50 p-3">
           {/* Views Section */}
           <div className="mb-16">
-            <div className="mb-3 flex items-center space-x-2">
-              <Eye className="h-4 w-4 text-gray-500" />
-              <span className="text-sm font-medium text-gray-700">Views</span>
-            </div>
             <div className="relative mb-3">
               <Search className="absolute left-2 top-2 h-4 w-4 text-gray-400" />
               <input
@@ -561,66 +798,81 @@ const AirtableClone = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {base?.rows.map((row, rowIdx) => (
-                    <tr key={row.id} className="hover:bg-gray-50">
-                      <td className="h-10 w-12 border-b border-r border-gray-200 bg-gray-50 text-center text-xs text-gray-500">
-                        {rowIdx + 1}
-                      </td>
-                      {base.columns.map((col, colIdx) => {
-                        const isSelected =
-                          selectedCell?.row === rowIdx &&
-                          selectedCell?.col === colIdx;
-                        const isEditing =
-                          editingCell?.row === rowIdx &&
-                          editingCell?.col === colIdx;
-                        const value = getCellValue(row, col.id);
-                        const isTempRow = row.id.startsWith("temp-row-");
-
+                  {filteredRows
+                    .filter((row) => {
+                      if (!searchTerm) return true;
+                      // Check if any cell contains the search term (case-insensitive)
+                      return base?.columns?.some((col) => {
+                        const value = row.data[col.id];
                         return (
-                          <td
-                            key={col.id}
-                            className={`relative h-10 cursor-pointer border-b border-r border-gray-200 px-3 ${
-                              isSelected
-                                ? "bg-blue-50 ring-2 ring-blue-400"
-                                : ""
-                            }`}
-                            onClick={() => handleCellClick(rowIdx, colIdx)}
-                            onDoubleClick={() =>
-                              handleCellDoubleClick(rowIdx, colIdx)
-                            }
-                          >
-                            {isEditing ? (
-                              <input
-                                disabled={isTempRow}
-                                className="absolute inset-0 h-full w-full border-none bg-transparent px-3 py-0 text-sm outline-none"
-                                autoFocus
-                                value={value}
-                                onChange={(e) =>
-                                  handleInputChange(
-                                    row.id,
-                                    col.id,
-                                    e.target.value
-                                  )
-                                }
-                                onBlur={handleEditEnd}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter" || e.key === "Escape") {
-                                    e.preventDefault();
-                                    handleEditEnd();
-                                  }
-                                }}
-                              />
-                            ) : (
-                              <div className="truncate text-sm text-gray-700">
-                                {value}
-                              </div>
-                            )}
-                          </td>
+                          typeof value === "string" &&
+                          value.toLowerCase().includes(searchTerm.toLowerCase())
                         );
-                      })}
-                      <td className="h-10 w-8 border-b border-gray-200"></td>
-                    </tr>
-                  ))}
+                      });
+                    })
+                    .map((row, rowIdx) => (
+                      <tr key={row.id} className="hover:bg-gray-50">
+                        <td className="h-10 w-12 border-b border-r border-gray-200 bg-gray-50 text-center text-xs text-gray-500">
+                          {rowIdx + 1}
+                        </td>
+                        {base?.columns.map((col, colIdx) => {
+                          const isSelected =
+                            selectedCell?.row === rowIdx &&
+                            selectedCell?.col === colIdx;
+                          const isEditing =
+                            editingCell?.row === rowIdx &&
+                            editingCell?.col === colIdx;
+                          const value = getCellValue(row, col.id);
+                          const isTempRow = row.id.startsWith("temp-row-");
+
+                          return (
+                            <td
+                              key={col.id}
+                              className={`relative h-10 cursor-pointer border-b border-r border-gray-200 px-3 ${
+                                isSelected
+                                  ? "bg-blue-50 ring-2 ring-blue-400"
+                                  : ""
+                              }`}
+                              onClick={() => handleCellClick(rowIdx, colIdx)}
+                              onDoubleClick={() =>
+                                handleCellDoubleClick(rowIdx, colIdx)
+                              }
+                            >
+                              {isEditing ? (
+                                <input
+                                  disabled={isTempRow}
+                                  className="absolute inset-0 h-full w-full border-none bg-transparent px-3 py-0 text-sm outline-none"
+                                  autoFocus
+                                  value={value}
+                                  onChange={(e) =>
+                                    handleInputChange(
+                                      row.id,
+                                      col.id,
+                                      e.target.value
+                                    )
+                                  }
+                                  onBlur={handleEditEnd}
+                                  onKeyDown={(e) => {
+                                    if (
+                                      e.key === "Enter" ||
+                                      e.key === "Escape"
+                                    ) {
+                                      e.preventDefault();
+                                      handleEditEnd();
+                                    }
+                                  }}
+                                />
+                              ) : (
+                                <div className="truncate text-sm text-gray-700">
+                                  {value}
+                                </div>
+                              )}
+                            </td>
+                          );
+                        })}
+                        <td className="h-10 w-8 border-b border-gray-200"></td>
+                      </tr>
+                    ))}
                   <tr>
                     <td
                       colSpan={(base?.columns?.length ?? 0) + 2}
