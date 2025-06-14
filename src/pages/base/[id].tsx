@@ -623,6 +623,25 @@ const AirtableClone = () => {
                     onChange={(e) =>
                       setFilterConfig((f) => ({ ...f, value: e.target.value }))
                     }
+                    onKeyDown={(e) => {
+                      if (
+                        e.key === "Enter" &&
+                        filterConfig.columnId &&
+                        filterConfig.type &&
+                        (["empty", "notEmpty"].includes(filterConfig.type) ||
+                          filterConfig.value)
+                      ) {
+                        setFilters((f) => ({
+                          ...f,
+                          [filterConfig.columnId!]: {
+                            type: filterConfig.type!,
+                            value: filterConfig.value || "",
+                          },
+                        }));
+                        setShowTextFilter(false); // or setShowNumberFilter(false) for number filter
+                        setFilterConfig({});
+                      }
+                    }}
                     placeholder="Value"
                   />
                 )}
@@ -695,6 +714,25 @@ const AirtableClone = () => {
                     onChange={(e) =>
                       setFilterConfig((f) => ({ ...f, value: e.target.value }))
                     }
+                    onKeyDown={(e) => {
+                      if (
+                        e.key === "Enter" &&
+                        filterConfig.columnId &&
+                        filterConfig.type &&
+                        (["empty", "notEmpty"].includes(filterConfig.type) ||
+                          filterConfig.value)
+                      ) {
+                        setFilters((f) => ({
+                          ...f,
+                          [filterConfig.columnId!]: {
+                            type: filterConfig.type!,
+                            value: filterConfig.value || "",
+                          },
+                        }));
+                        setShowTextFilter(false); // or setShowNumberFilter(false) for number filter
+                        setFilterConfig({});
+                      }
+                    }}
                     placeholder="Value"
                   />
                 )}
