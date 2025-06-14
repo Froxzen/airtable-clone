@@ -69,6 +69,11 @@ const AirtableClone = () => {
   const [filters, setFilters] = useState<
     Record<string, { type: string; value: string }>
   >({});
+  const [sortConfig, setSortConfig] = useState<{
+    columnId?: string;
+    direction?: "asc" | "desc";
+  }>({});
+  const [showSort, setShowSort] = useState(false);
 
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -83,6 +88,10 @@ const AirtableClone = () => {
 
   const utils = trpc.useUtils();
   const cellUpdateTimeouts = useRef(new Map<string, NodeJS.Timeout>());
+
+  const isSortActive = !!(sortConfig.columnId && sortConfig.direction);
+  const isFilterActive = Object.keys(filters).length > 0;
+  const isClearActive = isSortActive || isFilterActive;
 
   // Optimized mutations with proper cache updates
   const addColumn = trpc.base.addColumn.useMutation({
@@ -415,6 +424,27 @@ const AirtableClone = () => {
     });
   }, [base, filters]);
 
+  const sortedRows = useMemo(() => {
+    if (!filteredRows) return [];
+    if (!sortConfig.columnId || !sortConfig.direction) return filteredRows;
+    const colId = sortConfig.columnId;
+    return [...filteredRows].sort((a, b) => {
+      const aVal = a.data[colId];
+      const bVal = b.data[colId];
+      // Try number sort first, fallback to string
+      const aNum = Number(aVal);
+      const bNum = Number(bVal);
+      if (!isNaN(aNum) && !isNaN(bNum)) {
+        return sortConfig.direction === "asc" ? aNum - bNum : bNum - aNum;
+      }
+      const aStr = (aVal ?? "").toString().toLowerCase();
+      const bStr = (bVal ?? "").toString().toLowerCase();
+      if (aStr < bStr) return sortConfig.direction === "asc" ? -1 : 1;
+      if (aStr > bStr) return sortConfig.direction === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [filteredRows, sortConfig]);
+
   if (session === undefined) {
     // Session is loading
     return (
@@ -497,10 +527,51 @@ const AirtableClone = () => {
 
       {/* Controls Row: Filter, Sort, Find */}
       <div className="flex items-center gap-4 border-b border-gray-200 bg-purple-50 px-4 py-3">
-        <button className="flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-purple-700 shadow hover:bg-gray-100">
-          <SortAsc className="h-4 w-4" />
-          Sort
-        </button>
+        <div className="relative inline-block">
+          <button
+            className="flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-purple-700 shadow hover:bg-gray-100"
+            onClick={() => setShowSort((v) => !v)}
+            type="button"
+          >
+            <SortAsc className="h-4 w-4" />
+            Sort
+          </button>
+          {showSort && (
+            <div className="absolute left-0 top-full z-10 mt-2 w-64 max-w-xs rounded border bg-white p-4 shadow-lg">
+              <div className="mb-2 text-xs font-semibold text-gray-700">
+                Sort by
+              </div>
+              <select
+                className="mb-2 w-full rounded border px-2 py-1 text-xs"
+                value={sortConfig.columnId || ""}
+                onChange={(e) =>
+                  setSortConfig((s) => ({ ...s, columnId: e.target.value }))
+                }
+              >
+                <option value="">Select column</option>
+                {base?.columns.map((col) => (
+                  <option key={col.id} value={col.id}>
+                    {col.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="mb-2 w-full rounded border px-2 py-1 text-xs"
+                value={sortConfig.direction || ""}
+                onChange={(e) =>
+                  setSortConfig((s) => ({
+                    ...s,
+                    direction: e.target.value as "asc" | "desc",
+                  }))
+                }
+              >
+                <option value="">Select order</option>
+                <option value="asc">Ascending</option>
+                <option value="desc">Descending</option>
+              </select>
+            </div>
+          )}
+        </div>
         <div className="relative">
           <button
             className="flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-purple-700 shadow hover:bg-gray-100"
@@ -576,7 +647,6 @@ const AirtableClone = () => {
             </div>
           )}
         </div>
-
         <div className="relative">
           <button
             className="flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-purple-700 shadow hover:bg-gray-100"
@@ -651,18 +721,20 @@ const AirtableClone = () => {
         </div>
         <button
           className={`ml-2 flex items-center rounded px-2 py-1 ${
-            Object.keys(filters).length > 0
+            isClearActive
               ? "cursor-pointer bg-red-100 text-red-600 hover:bg-red-200"
               : "cursor-not-allowed bg-gray-100 text-gray-400"
           }`}
-          disabled={Object.keys(filters).length === 0}
-          onClick={() => setFilters({})}
-          title="Clear all filters"
+          disabled={!isClearActive}
+          onClick={() => {
+            setSortConfig({});
+            setFilters({});
+          }}
+          title="Clear sorting and filters"
           type="button"
         >
           <Trash2 className="h-4 w-4" />
         </button>
-
         <div className="relative ml-auto">
           <input
             type="text"
@@ -798,7 +870,7 @@ const AirtableClone = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredRows
+                  {sortedRows
                     .filter((row) => {
                       if (!searchTerm) return true;
                       // Check if any cell contains the search term (case-insensitive)
