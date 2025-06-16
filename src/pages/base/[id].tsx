@@ -649,7 +649,7 @@ const AirtableClone = () => {
           </div>
           <div
             className="flex cursor-pointer items-center space-x-1 rounded bg-white/20 px-2 py-1 hover:bg-white/30"
-            onClick={() => {handleAddFiveRows()}}
+            onClick={() => {void handleAddFiveRows()}}
           >
             <Plus className="h-4 w-4" />
             <span>Add 10000 rows</span>
