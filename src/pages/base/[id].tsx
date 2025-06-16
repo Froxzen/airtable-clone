@@ -25,7 +25,7 @@ import {
   Trash2,
 } from "lucide-react";
 import Image from "next/image";
-import { useVirtualizer } from '@tanstack/react-virtual'
+// import { useVirtualizer } from '@tanstack/react-virtual'
 
 // Define proper types for the data structures
 interface Column {
