@@ -82,11 +82,8 @@ export const baseRouter = createTRPCRouter({
         where: { baseId: input.baseId },
         orderBy: { order: "asc" },
       });
-      const rows = await ctx.prisma.row.findMany({
-        where: { baseId: input.baseId },
-        orderBy: { id: "asc" },
-      });
-      return { ...base, columns, rows };
+      // Don't return rows here since we use pagination
+      return { ...base, columns, rows: [] };
     }),
 
   addColumn: protectedProcedure
@@ -135,22 +132,22 @@ export const baseRouter = createTRPCRouter({
       return { success: true };
     }),
   getRowsPage: protectedProcedure
-  .input(
-    z.object({
-      baseId: z.string(),
-      offset: z.number(),
-      limit: z.number(),
-    })
-  )
-  .query(async ({ ctx, input }) => {
-    const rows = await ctx.prisma.row.findMany({
-      where: { baseId: input.baseId },
-      orderBy: { id: "asc" },
-      skip: input.offset,
-      take: input.limit,
-    });
-    return rows;
-  }),
+    .input(
+      z.object({
+        baseId: z.string(),
+        offset: z.number(),
+        limit: z.number(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const rows = await ctx.prisma.row.findMany({
+        where: { baseId: input.baseId },
+        orderBy: { id: "asc" },
+        skip: input.offset,
+        take: input.limit,
+      });
+      return rows;
+    }),
   updateRow: protectedProcedure
     .input(z.object({ rowId: z.string(), data: z.record(z.string(), z.any()) }))
     .mutation(async ({ ctx, input }) => {

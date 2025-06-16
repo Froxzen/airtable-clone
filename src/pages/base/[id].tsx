@@ -112,8 +112,6 @@ const AirtableClone = () => {
   const [hasMore, setHasMore] = useState(true);
   const [loadingRows, setLoadingRows] = useState(false);
 
-  
-
   const fetchRowsPage = useCallback(async () => {
     if (!baseId || loadingRows || !hasMore) return;
     setLoadingRows(true);
@@ -127,7 +125,14 @@ const AirtableClone = () => {
       ...row,
       data: row.data && typeof row.data === "object" ? row.data : {},
     })) as Row[];
-    setPagedRows((prev) => [...prev, ...normalizedRows]);
+
+    // Don't add duplicates - check if rows already exist
+    setPagedRows((prev) => {
+      const existingIds = new Set(prev.map((r) => r.id));
+      const newRows = normalizedRows.filter((row) => !existingIds.has(row.id));
+      return [...prev, ...newRows];
+    });
+
     setHasMore(rows.length === PAGE_SIZE);
     setLoadingRows(false);
   }, [baseId, page, loadingRows, hasMore, utils.base.getRowsPage]);
@@ -205,81 +210,16 @@ const AirtableClone = () => {
       }
     },
   });
-
   const addRow = trpc.base.addRow.useMutation({
-    onMutate: async ({ data }) => {
-      await utils.base.getTable.cancel({ baseId });
-
-      const previousData = utils.base.getTable.getData({ baseId });
-
-      // Optimistically update cache
-      const tempId = `temp-row-${Date.now()}`;
-      utils.base.getTable.setData({ baseId }, (old) =>
-        old
-          ? {
-              ...old,
-              rows: [...old.rows, { id: tempId, baseId, data }],
-            }
-          : old
-      );
-
-      return { previousData, tempId };
-    },
-    onSuccess: (newRow, _, context) => {
-      utils.base.getTable.setData({ baseId }, (old) => {
-        if (!old || !context) return old;
-        return {
-          ...old,
-          rows: old.rows.map((row) =>
-            row.id === context.tempId ? newRow : row
-          ),
-        };
-      });
-    },
-    onError: (_, __, context) => {
-      if (context?.previousData) {
-        utils.base.getTable.setData({ baseId }, context.previousData);
-      }
+    onSuccess: () => {
+      // Reset pagination to refresh the data
+      setResetPagingFlag(true);
     },
   });
-
   const updateRow = trpc.base.updateRow.useMutation({
-    onMutate: async ({ rowId, data }) => {
-      await utils.base.getTable.cancel({ baseId });
-
-      const previousData = utils.base.getTable.getData({ baseId });
-
-      // Optimistically update cache
-      utils.base.getTable.setData({ baseId }, (old) =>
-        old
-          ? {
-              ...old,
-              rows: old.rows.map((row) =>
-                row.id === rowId ? { ...row, data } : row
-              ),
-            }
-          : old
-      );
-
-      return { previousData };
-    },
-    onSuccess: (updatedRow) => {
-      // Server data should match optimistic update, but update anyway
-      utils.base.getTable.setData({ baseId }, (old) =>
-        old
-          ? {
-              ...old,
-              rows: old.rows.map((row) =>
-                row.id === updatedRow.id ? updatedRow : row
-              ),
-            }
-          : old
-      );
-    },
-    onError: (_, __, context) => {
-      if (context?.previousData) {
-        utils.base.getTable.setData({ baseId }, context.previousData);
-      }
+    onSuccess: () => {
+      // Invalidate to refresh data
+      void utils.base.getTable.invalidate({ baseId });
     },
   });
 
@@ -451,40 +391,11 @@ const AirtableClone = () => {
       void router.push("/");
     });
   };
-
   const addManyRows = trpc.base.addManyRows.useMutation({
-    onMutate: async ({ baseId, rows }) => {
-      await utils.base.getTable.cancel({ baseId });
-      const previousData = utils.base.getTable.getData({ baseId });
-
-      // Optimistically add rows with temporary IDs
-      utils.base.getTable.setData({ baseId }, (old) =>
-        old
-          ? {
-              ...old,
-              rows: [
-                ...old.rows,
-                ...rows.map((data, i) => ({
-                  id: `temp-row-bulk-${Date.now()}-${i}`,
-                  baseId,
-                  data,
-                })),
-              ],
-            }
-          : old
-      );
-
-      return { previousData };
-    },
     onSuccess: async () => {
-      // Invalidate to get real rows from server
+      // Invalidate and reset pagination
       await utils.base.getTable.invalidate({ baseId });
-      void setResetPagingFlag(true);
-    },
-    onError: (_, __, context) => {
-      if (context?.previousData) {
-        utils.base.getTable.setData({ baseId }, context.previousData);
-      }
+      setResetPagingFlag(true);
     },
   });
   useEffect(() => {
@@ -649,7 +560,9 @@ const AirtableClone = () => {
           </div>
           <div
             className="flex cursor-pointer items-center space-x-1 rounded bg-white/20 px-2 py-1 hover:bg-white/30"
-            onClick={() => {void handleAddFiveRows()}}
+            onClick={() => {
+              void handleAddFiveRows();
+            }}
           >
             <Plus className="h-4 w-4" />
             <span>Add 10000 rows</span>
