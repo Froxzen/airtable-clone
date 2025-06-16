@@ -209,17 +209,73 @@ const AirtableClone = () => {
         utils.base.getTable.setData({ baseId }, context.previousData);
       }
     },
-  });
-  const addRow = trpc.base.addRow.useMutation({
-    onSuccess: () => {
-      // Reset pagination to refresh the data
-      setResetPagingFlag(true);
+  });  const addRow = trpc.base.addRow.useMutation({
+    onMutate: async ({ data }) => {
+      // Cancel outgoing refetches
+      await utils.base.getTable.cancel({ baseId });
+
+      // Snapshot previous value
+      const previousPagedRows = pagedRows;
+
+      // Optimistically add row to paginated data
+      const tempId = `temp-row-${Date.now()}`;
+      const tempRow: Row = { id: tempId, baseId, data };
+      setPagedRows((prev) => [...prev, tempRow]);
+
+      return { previousPagedRows, tempId };
     },
-  });
-  const updateRow = trpc.base.updateRow.useMutation({
-    onSuccess: () => {
-      // Invalidate to refresh data
-      void utils.base.getTable.invalidate({ baseId });
+    onSuccess: (newRow, _, context) => {
+      // Update with real data from server
+      if (context) {
+        setPagedRows((prev) =>
+          prev.map((row) =>
+            row.id === context.tempId ? {
+              ...newRow,
+              data: newRow.data && typeof newRow.data === "object" ? newRow.data : {},
+            } as Row : row
+          )
+        );
+      }
+    },
+    onError: (_, __, context) => {
+      // Rollback on error
+      if (context?.previousPagedRows) {
+        setPagedRows(context.previousPagedRows);
+      }
+    },
+  });  const updateRow = trpc.base.updateRow.useMutation({
+    onMutate: async ({ rowId, data }) => {
+      // Cancel outgoing refetches
+      await utils.base.getTable.cancel({ baseId });
+
+      // Snapshot previous value
+      const previousPagedRows = pagedRows;
+
+      // Optimistically update the row in paginated data
+      setPagedRows((prev) =>
+        prev.map((row) =>
+          row.id === rowId ? { ...row, data } : row
+        )
+      );
+
+      return { previousPagedRows };
+    },
+    onSuccess: (updatedRow, _, context) => {
+      // Update with real data from server
+      setPagedRows((prev) =>
+        prev.map((row) =>
+          row.id === updatedRow.id ? {
+            ...updatedRow,
+            data: updatedRow.data && typeof updatedRow.data === "object" ? updatedRow.data : {},
+          } as Row : row
+        )
+      );
+    },
+    onError: (_, __, context) => {
+      // Rollback on error
+      if (context?.previousPagedRows) {
+        setPagedRows(context.previousPagedRows);
+      }
     },
   });
 
@@ -264,7 +320,6 @@ const AirtableClone = () => {
     void addRow.mutateAsync({ baseId, data: emptyData });
     // No refetch needed - optimistic updates handle this
   };
-
   // Debounced cell update to prevent excessive API calls
   const handleCellValueChange = (
     rowId: string,
@@ -283,8 +338,7 @@ const AirtableClone = () => {
 
     // Set new timeout for backend update
     const timeout = setTimeout(() => {
-      if (!base) return;
-      const row = base.rows.find((r) => r.id === rowId);
+      const row = pagedRows.find((r) => r.id === rowId);
       if (!row) return;
 
       const dataObj = row.data ?? {};
@@ -328,7 +382,6 @@ const AirtableClone = () => {
     setEditingCell({ row: rowIdx, col: colIdx });
     wrapperRef.current?.blur();
   };
-
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (!selectedCell || editingCell || !base) return;
     const { row, col } = selectedCell;
@@ -342,7 +395,7 @@ const AirtableClone = () => {
         if (col > 0) setSelectedCell({ row, col: col - 1 });
         break;
       case "ArrowDown":
-        if (row < base.rows.length - 1) setSelectedCell({ row: row + 1, col });
+        if (row < pagedRows.length - 1) setSelectedCell({ row: row + 1, col });
         break;
       case "ArrowUp":
         if (row > 0) setSelectedCell({ row: row - 1, col });
@@ -357,13 +410,12 @@ const AirtableClone = () => {
   const handleInputChange = (rowId: string, colId: string, value: string) => {
     handleCellValueChange(rowId, colId, value);
   };
-
   // Handle ending edit mode
   const handleEditEnd = () => {
-    if (editingCell && base) {
-      const row = base.rows[editingCell.row];
+    if (editingCell) {
+      const row = pagedRows[editingCell.row];
       if (row && row.id.startsWith("temp-row-")) return;
-      const col = base.columns[editingCell.col];
+      const col = base?.columns[editingCell.col];
       if (row && col) {
         const key = `${row.id}-${col.id}`;
 
