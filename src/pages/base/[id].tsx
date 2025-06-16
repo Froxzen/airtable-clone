@@ -118,7 +118,7 @@ const AirtableClone = () => {
     const normalizedRows: Row[] = rows.map((row: any) => ({
       ...row,
       data: row.data && typeof row.data === "object" ? row.data : {},
-    }));
+    })) as Row[];
     setPagedRows((prev) => [...prev, ...normalizedRows]);
     setHasMore(rows.length === PAGE_SIZE);
     setLoadingRows(false);
@@ -133,7 +133,7 @@ const AirtableClone = () => {
   }, [baseId, resetPagingFlag]);
 
   useEffect(() => {
-    fetchRowsPage();
+    void fetchRowsPage();
     // eslint-disable-next-line
   }, [page, fetchRowsPage]);
 
@@ -471,7 +471,7 @@ const AirtableClone = () => {
     onSuccess: () => {
       // Invalidate to get real rows from server
       utils.base.getTable.invalidate({ baseId });
-      setResetPagingFlag(true);
+      void setResetPagingFlag(true);
     },
     onError: (_, __, context) => {
       if (context?.previousData) {
@@ -641,7 +641,7 @@ const AirtableClone = () => {
           </div>
           <div
             className="flex cursor-pointer items-center space-x-1 rounded bg-white/20 px-2 py-1 hover:bg-white/30"
-            onClick={handleAddFiveRows}
+            onClick={() => {handleAddFiveRows()}}
           >
             <Plus className="h-4 w-4" />
             <span>Add 10000 rows</span>
