@@ -1,4 +1,10 @@
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useMemo,
+  useCallback,
+} from "react";
 import { trpc } from "~/utils/api";
 import { useRouter } from "next/router";
 import { useSession, signOut } from "next-auth/react";
@@ -16,9 +22,10 @@ import {
   Search,
   Filter,
   SortAsc,
-  Trash2
+  Trash2,
 } from "lucide-react";
 import Image from "next/image";
+import { useVirtualizer } from '@tanstack/react-virtual'
 
 // Define proper types for the data structures
 interface Column {
@@ -92,6 +99,62 @@ const AirtableClone = () => {
   const isSortActive = !!(sortConfig.columnId && sortConfig.direction);
   const isFilterActive = Object.keys(filters).length > 0;
   const isClearActive = isSortActive || isFilterActive;
+
+  const PAGE_SIZE = 500;
+  const [pagedRows, setPagedRows] = useState<Row[]>([]);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingRows, setLoadingRows] = useState(false);
+
+  const fetchRowsPage = useCallback(async () => {
+    if (!baseId || loadingRows || !hasMore) return;
+    setLoadingRows(true);
+    const rows = await utils.base.getRowsPage.fetch({
+      baseId,
+      offset: page * PAGE_SIZE,
+      limit: PAGE_SIZE,
+    });
+    // Ensure each row's data is a Record<string, unknown>
+    const normalizedRows: Row[] = rows.map((row: any) => ({
+      ...row,
+      data: row.data && typeof row.data === "object" ? row.data : {},
+    }));
+    setPagedRows((prev) => [...prev, ...normalizedRows]);
+    setHasMore(rows.length === PAGE_SIZE);
+    setLoadingRows(false);
+  }, [baseId, page, loadingRows, hasMore, utils.base.getRowsPage]);
+
+  const [resetPagingFlag, setResetPagingFlag] = useState(false);
+  // Initial load
+  useEffect(() => {
+    setPagedRows([]);
+    setPage(0);
+    setHasMore(true);
+  }, [baseId, resetPagingFlag]);
+
+  useEffect(() => {
+    fetchRowsPage();
+    // eslint-disable-next-line
+  }, [page, fetchRowsPage]);
+
+  // Scroll handler
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const el = tableContainerRef.current;
+      if (!el || loadingRows || !hasMore) return;
+      // Only trigger when we're within 50px of the bottom
+      if (el.scrollTop + el.clientHeight >= el.scrollHeight - 50) {
+        setPage((p) => p + 1);
+      }
+    };
+    const el = tableContainerRef.current;
+    if (el) {
+      el.addEventListener("scroll", handleScroll);
+      return () => el.removeEventListener("scroll", handleScroll);
+    }
+  }, [loadingRows, hasMore]);
 
   // Optimized mutations with proper cache updates
   const addColumn = trpc.base.addColumn.useMutation({
@@ -381,10 +444,68 @@ const AirtableClone = () => {
     });
   };
 
-  // Combine all active filters (from both text and number popups) in your filters state
+  const addManyRows = trpc.base.addManyRows.useMutation({
+    onMutate: async ({ baseId, rows }) => {
+      await utils.base.getTable.cancel({ baseId });
+      const previousData = utils.base.getTable.getData({ baseId });
+
+      // Optimistically add rows with temporary IDs
+      utils.base.getTable.setData({ baseId }, (old) =>
+        old
+          ? {
+              ...old,
+              rows: [
+                ...old.rows,
+                ...rows.map((data, i) => ({
+                  id: `temp-row-bulk-${Date.now()}-${i}`,
+                  baseId,
+                  data,
+                })),
+              ],
+            }
+          : old
+      );
+
+      return { previousData };
+    },
+    onSuccess: () => {
+      // Invalidate to get real rows from server
+      utils.base.getTable.invalidate({ baseId });
+      setResetPagingFlag(true);
+    },
+    onError: (_, __, context) => {
+      if (context?.previousData) {
+        utils.base.getTable.setData({ baseId }, context.previousData);
+      }
+    },
+  });
+  useEffect(() => {
+    if (resetPagingFlag) {
+      setPagedRows([]);
+      setPage(0);
+      setHasMore(true);
+      setResetPagingFlag(false);
+    }
+  }, [resetPagingFlag]);
+
+  const handleAddFiveRows = async () => {
+    if (!base) return;
+    const emptyData = Object.fromEntries(
+      base.columns.map((col) => [col.id, ""])
+    );
+    const rows = Array.from({ length: 10000 }, () => emptyData);
+
+    const BATCH_SIZE = 500;
+    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+      const batch = rows.slice(i, i + BATCH_SIZE);
+      // Await each batch to avoid overloading the server
+      await addManyRows.mutateAsync({ baseId, rows: batch });
+    }
+  };
+
   const filteredRows = useMemo(() => {
-    if (!base) return [];
-    return base.rows.filter((row) => {
+    if (!pagedRows.length) return [];
+    return pagedRows.filter((row) => {
       // For each filter applied, check if the row matches
       return Object.entries(filters).every(([colId, filter]) => {
         const value = row.data[colId];
@@ -422,7 +543,7 @@ const AirtableClone = () => {
         return true;
       });
     });
-  }, [base, filters]);
+  }, [pagedRows, filters]);
 
   const sortedRows = useMemo(() => {
     if (!filteredRows) return [];
@@ -518,9 +639,12 @@ const AirtableClone = () => {
           <div className="flex items-center space-x-1">
             <span>Table 1</span>
           </div>
-          <div className="flex items-center space-x-1 rounded bg-white/20 px-2 py-1">
+          <div
+            className="flex cursor-pointer items-center space-x-1 rounded bg-white/20 px-2 py-1 hover:bg-white/30"
+            onClick={handleAddFiveRows}
+          >
             <Plus className="h-4 w-4" />
-            <span>Add 100k rows</span>
+            <span>Add 10000 rows</span>
           </div>
         </div>
       </div>
@@ -870,7 +994,7 @@ const AirtableClone = () => {
         {/* Main Content */}
         <div className="flex flex-1 flex-col">
           {/* Table Container */}
-          <div className="flex-1 overflow-auto">
+          <div ref={tableContainerRef} className="flex-1 overflow-auto">
             <div
               ref={wrapperRef}
               className="outline-none"
@@ -1007,7 +1131,8 @@ const AirtableClone = () => {
           {/* Bottom Status */}
           <div className="flex h-8 items-center border-t border-gray-200 bg-white px-4">
             <span className="text-xs text-gray-500">
-              {base?.rows.length} records
+              {pagedRows.length} records loaded
+              {hasMore ? " (loading more...)" : ""}
             </span>
             <div className="ml-auto">
               <button className="rounded bg-gray-800 px-2 py-1 text-xs text-white">

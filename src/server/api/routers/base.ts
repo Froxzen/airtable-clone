@@ -84,6 +84,7 @@ export const baseRouter = createTRPCRouter({
       });
       const rows = await ctx.prisma.row.findMany({
         where: { baseId: input.baseId },
+        orderBy: { id: "asc" },
       });
       return { ...base, columns, rows };
     }),
@@ -134,25 +135,22 @@ export const baseRouter = createTRPCRouter({
       return { success: true };
     }),
   getRowsPage: protectedProcedure
-    .input(
-      z.object({
-        baseId: z.string(),
-        offset: z.number(),
-        limit: z.number(),
-      })
-    )
-    .query(async ({ ctx, input }) => {
-      const rows = await ctx.prisma.row.findMany({
-        where: { baseId: input.baseId },
-        skip: input.offset,
-        take: input.limit,
-        orderBy: { id: "asc" },
-      });
-      const total = await ctx.prisma.row.count({
-        where: { baseId: input.baseId },
-      });
-      return { rows, total };
-    }),
+  .input(
+    z.object({
+      baseId: z.string(),
+      offset: z.number(),
+      limit: z.number(),
+    })
+  )
+  .query(async ({ ctx, input }) => {
+    const rows = await ctx.prisma.row.findMany({
+      where: { baseId: input.baseId },
+      orderBy: { id: "asc" },
+      skip: input.offset,
+      take: input.limit,
+    });
+    return rows;
+  }),
   updateRow: protectedProcedure
     .input(z.object({ rowId: z.string(), data: z.record(z.string(), z.any()) }))
     .mutation(async ({ ctx, input }) => {
