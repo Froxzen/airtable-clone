@@ -476,9 +476,9 @@ const AirtableClone = () => {
 
       return { previousData };
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       // Invalidate to get real rows from server
-      utils.base.getTable.invalidate({ baseId });
+      await utils.base.getTable.invalidate({ baseId });
       void setResetPagingFlag(true);
     },
     onError: (_, __, context) => {
