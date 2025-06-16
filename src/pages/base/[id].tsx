@@ -209,7 +209,8 @@ const AirtableClone = () => {
         utils.base.getTable.setData({ baseId }, context.previousData);
       }
     },
-  });  const addRow = trpc.base.addRow.useMutation({
+  });
+  const addRow = trpc.base.addRow.useMutation({
     onMutate: async ({ data }) => {
       // Cancel outgoing refetches
       await utils.base.getTable.cancel({ baseId });
@@ -229,10 +230,15 @@ const AirtableClone = () => {
       if (context) {
         setPagedRows((prev) =>
           prev.map((row) =>
-            row.id === context.tempId ? {
-              ...newRow,
-              data: newRow.data && typeof newRow.data === "object" ? newRow.data : {},
-            } as Row : row
+            row.id === context.tempId
+              ? ({
+                  ...newRow,
+                  data:
+                    newRow.data && typeof newRow.data === "object"
+                      ? newRow.data
+                      : {},
+                } as Row)
+              : row
           )
         );
       }
@@ -243,7 +249,8 @@ const AirtableClone = () => {
         setPagedRows(context.previousPagedRows);
       }
     },
-  });  const updateRow = trpc.base.updateRow.useMutation({
+  });
+  const updateRow = trpc.base.updateRow.useMutation({
     onMutate: async ({ rowId, data }) => {
       // Cancel outgoing refetches
       await utils.base.getTable.cancel({ baseId });
@@ -253,9 +260,7 @@ const AirtableClone = () => {
 
       // Optimistically update the row in paginated data
       setPagedRows((prev) =>
-        prev.map((row) =>
-          row.id === rowId ? { ...row, data } : row
-        )
+        prev.map((row) => (row.id === rowId ? { ...row, data } : row))
       );
 
       return { previousPagedRows };
@@ -264,10 +269,15 @@ const AirtableClone = () => {
       // Update with real data from server
       setPagedRows((prev) =>
         prev.map((row) =>
-          row.id === updatedRow.id ? {
-            ...updatedRow,
-            data: updatedRow.data && typeof updatedRow.data === "object" ? updatedRow.data : {},
-          } as Row : row
+          row.id === updatedRow.id
+            ? ({
+                ...updatedRow,
+                data:
+                  updatedRow.data && typeof updatedRow.data === "object"
+                    ? updatedRow.data
+                    : {},
+              } as Row)
+            : row
         )
       );
     },
@@ -442,12 +452,17 @@ const AirtableClone = () => {
     void signOut({ redirect: false }).then(() => {
       void router.push("/");
     });
-  };
-  const addManyRows = trpc.base.addManyRows.useMutation({
-    onSuccess: async () => {
-      // Invalidate and reset pagination
-      await utils.base.getTable.invalidate({ baseId });
-      setResetPagingFlag(true);
+  };  const addManyRows = trpc.base.addManyRows.useMutation({
+    onMutate: async ({ rows }) => {
+      // Optimistically add rows to UI immediately
+      const tempRows = rows.map((data, i) => ({
+        id: `temp-row-bulk-${Date.now()}-${i}`,
+        baseId,
+        data,
+      })) as Row[];
+      
+      setPagedRows((prev) => [...prev, ...tempRows]);
+      return { tempRows };
     },
   });
   useEffect(() => {
@@ -458,20 +473,37 @@ const AirtableClone = () => {
       setResetPagingFlag(false);
     }
   }, [resetPagingFlag]);
-
   const handleAddFiveRows = async () => {
     if (!base) return;
     const emptyData = Object.fromEntries(
       base.columns.map((col) => [col.id, ""])
     );
-    const rows = Array.from({ length: 10000 }, () => emptyData);
-
-    const BATCH_SIZE = 500;
-    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-      const batch = rows.slice(i, i + BATCH_SIZE);
-      // Await each batch to avoid overloading the server
-      await addManyRows.mutateAsync({ baseId, rows: batch });
+    const totalRows = 10000;
+    const BATCH_SIZE = 1000; // Larger batches for better performance
+    
+    // Process batches in parallel (limit concurrency to avoid overwhelming server)
+    const batches = [];
+    for (let i = 0; i < totalRows; i += BATCH_SIZE) {
+      const batch = Array.from({ length: Math.min(BATCH_SIZE, totalRows - i) }, () => emptyData);
+      batches.push(batch);
     }
+    
+    // Process batches with limited concurrency
+    const CONCURRENT_BATCHES = 3;
+    for (let i = 0; i < batches.length; i += CONCURRENT_BATCHES) {
+      const currentBatches = batches.slice(i, i + CONCURRENT_BATCHES);
+      
+      // Process these batches in parallel
+      await Promise.all(
+        currentBatches.map(batch => 
+          addManyRows.mutateAsync({ baseId, rows: batch })
+        )
+      );
+    }
+    
+    // Refresh data after all batches complete
+    await utils.base.getTable.invalidate({ baseId });
+    setResetPagingFlag(true);
   };
 
   const filteredRows = useMemo(() => {
@@ -625,9 +657,14 @@ const AirtableClone = () => {
       {/* Controls Row: Filter, Sort, Find */}
       <div className="flex items-center gap-4 border-b border-gray-200 bg-purple-50 px-4 py-3">
         <div className="relative inline-block">
+          {" "}
           <button
             className="flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-purple-700 shadow hover:bg-gray-100"
-            onClick={() => setShowSort((v) => !v)}
+            onClick={() => {
+              setShowSort((v) => !v);
+              setShowTextFilter(false);
+              setShowNumberFilter(false);
+            }}
             type="button"
           >
             <SortAsc className="h-4 w-4" />
@@ -670,9 +707,14 @@ const AirtableClone = () => {
           )}
         </div>
         <div className="relative">
+          {" "}
           <button
             className="flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-purple-700 shadow hover:bg-gray-100"
-            onClick={() => setShowTextFilter((v) => !v)}
+            onClick={() => {
+              setShowTextFilter((v) => !v);
+              setShowSort(false);
+              setShowNumberFilter(false);
+            }}
             type="button"
           >
             <Filter className="h-4 w-4" />
@@ -764,15 +806,19 @@ const AirtableClone = () => {
           )}
         </div>
         <div className="relative">
+          {" "}
           <button
             className="flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-purple-700 shadow hover:bg-gray-100"
-            onClick={() => setShowNumberFilter((v) => !v)}
+            onClick={() => {
+              setShowNumberFilter((v) => !v);
+              setShowSort(false);
+              setShowTextFilter(false);
+            }}
             type="button"
           >
             <Filter className="h-4 w-4" />
             Filter Number
           </button>
-
           {showNumberFilter && (
             <div className="absolute left-0 z-10 mt-2 w-64 rounded border bg-white p-4 shadow-lg">
               <div className="mb-2 text-xs font-semibold text-gray-700">
@@ -853,7 +899,7 @@ const AirtableClone = () => {
               </button>
             </div>
           )}
-        </div>
+        </div>{" "}
         <button
           className={`ml-2 flex items-center rounded px-2 py-1 ${
             isClearActive
@@ -864,6 +910,7 @@ const AirtableClone = () => {
           onClick={() => {
             setSortConfig({});
             setFilters({});
+            setShowSort(false);
           }}
           title="Clear sorting and filters"
           type="button"
