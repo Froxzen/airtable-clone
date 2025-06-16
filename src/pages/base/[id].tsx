@@ -47,6 +47,12 @@ interface Base {
   rows: Row[];
 }
 
+interface ApiRow {
+  id: string;
+  baseId: string;
+  data: unknown; // This matches what comes from your API
+}
+
 const AirtableClone = () => {
   const [selectedCell, setSelectedCell] = useState<{
     row: number;
@@ -106,6 +112,8 @@ const AirtableClone = () => {
   const [hasMore, setHasMore] = useState(true);
   const [loadingRows, setLoadingRows] = useState(false);
 
+  
+
   const fetchRowsPage = useCallback(async () => {
     if (!baseId || loadingRows || !hasMore) return;
     setLoadingRows(true);
@@ -115,7 +123,7 @@ const AirtableClone = () => {
       limit: PAGE_SIZE,
     });
     // Ensure each row's data is a Record<string, unknown>
-    const normalizedRows: Row[] = rows.map((row: any) => ({
+    const normalizedRows: Row[] = rows.map((row: ApiRow) => ({
       ...row,
       data: row.data && typeof row.data === "object" ? row.data : {},
     })) as Row[];
