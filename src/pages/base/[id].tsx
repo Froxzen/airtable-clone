@@ -657,8 +657,8 @@ const AirtableClone = () => {
     const emptyData = Object.fromEntries(
       base.columns.map((col) => [col.id, ""])
     );
-    const totalRows = 10000;
-    const BATCH_SIZE = 1000;
+    const totalRows = 1000;
+    const BATCH_SIZE = 500;
 
     // Process batches in parallel
     const batches = [];
@@ -835,7 +835,7 @@ const AirtableClone = () => {
             }}
           >
             <Plus className="h-4 w-4" />
-            <span>Add 10000 rows</span>
+            <span>Add 1000 rows</span>
           </div>
         </div>
       </div>
@@ -844,7 +844,7 @@ const AirtableClone = () => {
         <div className="relative inline-block">
           {" "}
           <button
-            className="flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-purple-700 shadow hover:bg-gray-100"
+            className="flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-gray-600 shadow hover:bg-gray-100"
             onClick={() => {
               setShowSort((v) => !v);
               setShowTextFilter(false);
@@ -897,7 +897,7 @@ const AirtableClone = () => {
         <div className="relative">
           {" "}
           <button
-            className="flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-purple-700 shadow hover:bg-gray-100"
+            className="flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-gray-600 shadow hover:bg-gray-100"
             onClick={() => {
               setShowTextFilter((v) => !v);
               setShowSort(false);
@@ -976,7 +976,7 @@ const AirtableClone = () => {
                   />
                 )}
               <button
-                className="w-full rounded bg-purple-500 py-1 text-xs font-semibold text-white hover:bg-purple-600"
+                className={`w-full rounded ${getBaseColor} py-1 text-xs font-semibold text-white hover:${getSecondaryBaseColor}`}
                 onClick={() => {
                   if (filterConfig.columnId && filterConfig.type) {
                     setFilters((f) => ({
@@ -999,7 +999,7 @@ const AirtableClone = () => {
         <div className="relative">
           {" "}
           <button
-            className="flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-purple-700 shadow hover:bg-gray-100"
+            className="flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-gray-600 shadow hover:bg-gray-100"
             onClick={() => {
               setShowNumberFilter((v) => !v);
               setShowSort(false);
@@ -1074,7 +1074,7 @@ const AirtableClone = () => {
                   />
                 )}
               <button
-                className="w-full rounded bg-purple-500 py-1 text-xs font-semibold text-white hover:bg-purple-600"
+                className={`w-full rounded ${getBaseColor} py-1 text-xs font-semibold text-white hover:${getSecondaryBaseColor}`}
                 onClick={() => {
                   if (filterConfig.columnId && filterConfig.type) {
                     setFilters((f) => ({
