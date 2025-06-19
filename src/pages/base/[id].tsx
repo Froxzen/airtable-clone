@@ -108,7 +108,6 @@ const AirtableClone = () => {
   const getBaseColor = useMemo(() => {
     if (!base?.id) return "bg-purple-500";
 
-
     const colors = [
       "bg-red-500",
       "bg-blue-500",
@@ -974,15 +973,19 @@ const AirtableClone = () => {
                     }}
                     placeholder="Value"
                   />
-                )}
+                )}{" "}
               <button
-                className={`w-full rounded ${getBaseColor} py-1 text-xs font-semibold text-white hover:${getSecondaryBaseColor}`}
+                className={`w-full rounded ${
+                  getBaseColor ?? "bg-purple-500"
+                } py-1 text-xs font-semibold text-white hover:${
+                  getSecondaryBaseColor ?? "bg-purple-600"
+                }`}
                 onClick={() => {
                   if (filterConfig.columnId && filterConfig.type) {
                     setFilters((f) => ({
                       ...f,
-                      [filterConfig.columnId!]: {
-                        type: filterConfig.type!,
+                      [filterConfig.columnId as string]: {
+                        type: filterConfig.type as string,
                         value: filterConfig.value || "",
                       },
                     }));
