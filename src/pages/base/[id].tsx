@@ -482,7 +482,7 @@ const AirtableClone = () => {
     const totalRows = 10000;
     const BATCH_SIZE = 1000;
 
-    // Process batches in parallel (limit concurrency to avoid overwhelming server)
+    // Process batches in parallel
     const batches = [];
     for (let i = 0; i < totalRows; i += BATCH_SIZE) {
       const batch = Array.from(
@@ -1082,13 +1082,12 @@ const AirtableClone = () => {
                             editingCell?.col === colIdx;
                           const value = getCellValue(row, col.id);
                           const isTempRow = row.id.startsWith("temp-row-");
-
                           return (
                             <td
                               key={col.id}
                               className={`relative h-10 cursor-pointer border-b border-r border-gray-200 px-3 ${
-                                isSelected
-                                  ? "bg-blue-50 ring-2 ring-blue-400"
+                                isSelected || isEditing
+                                  ? "bg-white shadow-[inset_0_0_0_3px_#3b82f6]"
                                   : ""
                               }`}
                               onClick={() => handleCellClick(rowIdx, colIdx)}
@@ -1099,7 +1098,7 @@ const AirtableClone = () => {
                               {isEditing ? (
                                 <input
                                   disabled={isTempRow}
-                                  className="absolute inset-0 h-full w-full border-none bg-transparent px-3 py-0 text-sm outline-none"
+                                  className="absolute inset-0 h-full w-full border-none bg-white px-3 py-0 text-sm outline-none"
                                   autoFocus
                                   value={value}
                                   onChange={(e) =>
