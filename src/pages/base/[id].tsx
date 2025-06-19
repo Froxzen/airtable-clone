@@ -106,6 +106,42 @@ const AirtableClone = () => {
 
   // Calculate base color (same logic as dashboard)
   const getBaseColor = useMemo(() => {
+    if (!base?.id) return "bg-purple-500";
+
+
+    const colors = [
+      "bg-red-500",
+      "bg-blue-500",
+      "bg-green-500",
+      "bg-purple-500",
+      "bg-yellow-500",
+      "bg-pink-500",
+      "bg-indigo-500",
+      "bg-teal-500",
+      "bg-orange-500",
+      "bg-cyan-500",
+      "bg-lime-500",
+      "bg-amber-500",
+      "bg-rose-500",
+      "bg-fuchsia-500",
+      "bg-violet-500",
+      "bg-emerald-500",
+      "bg-sky-500",
+      "bg-gray-500",
+    ];
+
+    function hashString(id: string) {
+      let hash = 0;
+      for (let i = 0; i < id.length; i++) {
+        hash = id.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      return Math.abs(hash);
+    }
+
+    return colors[hashString(base.id) % colors.length];
+  }, [base?.id]);
+
+  const getSecondaryBaseColor = useMemo(() => {
     if (!base?.id) return "bg-purple-600";
 
     const colors = [
@@ -142,7 +178,9 @@ const AirtableClone = () => {
 
   // Get darker variant for secondary header
   const getBaseColorDark = useMemo(() => {
-    return getBaseColor ? getBaseColor.replace("-600", "-700") : "bg-purple-700";
+    return getBaseColor
+      ? getBaseColor.replace("-600", "-700")
+      : "bg-purple-700";
   }, [getBaseColor]);
 
   const utils = trpc.useUtils();
@@ -783,7 +821,9 @@ const AirtableClone = () => {
         </div>
       </div>
       {/* Secondary Header */}
-      <div className={`flex h-12 items-center px-4 text-sm text-white ${getBaseColor}`}>
+      <div
+        className={`flex h-12 items-center px-4 text-sm text-white ${getSecondaryBaseColor}`}
+      >
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-1">
             <span>Table 1</span>
