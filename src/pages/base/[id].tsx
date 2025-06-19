@@ -89,6 +89,9 @@ const AirtableClone = () => {
   const [showSort, setShowSort] = useState(false);
 
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const sortPopupRef = useRef<HTMLDivElement>(null);
+  const textFilterPopupRef = useRef<HTMLDivElement>(null);
+  const numberFilterPopupRef = useRef<HTMLDivElement>(null);
 
   const router = useRouter();
   const baseId = router.query.id as string;
@@ -310,6 +313,45 @@ const AirtableClone = () => {
       wrapperRef.current.focus();
     }
   }, [selectedCell, editingCell]);
+
+  // Click outside to close popups
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+
+      // Check if click is outside sort popup
+      if (
+        showSort &&
+        sortPopupRef.current &&
+        !sortPopupRef.current.contains(target)
+      ) {
+        setShowSort(false);
+      }
+
+      // Check if click is outside text filter popup
+      if (
+        showTextFilter &&
+        textFilterPopupRef.current &&
+        !textFilterPopupRef.current.contains(target)
+      ) {
+        setShowTextFilter(false);
+      }
+
+      // Check if click is outside number filter popup
+      if (
+        showNumberFilter &&
+        numberFilterPopupRef.current &&
+        !numberFilterPopupRef.current.contains(target)
+      ) {
+        setShowNumberFilter(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showSort, showTextFilter, showNumberFilter]);
 
   // Optimized handlers - no more refetch calls
   const handleAddColumn = () => {
@@ -673,9 +715,12 @@ const AirtableClone = () => {
           >
             <SortAsc className="h-4 w-4" />
             Sort
-          </button>
+          </button>{" "}
           {showSort && (
-            <div className="absolute left-0 top-full z-10 mt-2 w-64 max-w-xs rounded border bg-white p-4 shadow-lg">
+            <div
+              ref={sortPopupRef}
+              className="absolute left-0 top-full z-10 mt-2 w-64 max-w-xs rounded border bg-white p-4 shadow-lg"
+            >
               <div className="mb-2 text-xs font-semibold text-gray-700">
                 Sort by
               </div>
@@ -723,9 +768,12 @@ const AirtableClone = () => {
           >
             <Filter className="h-4 w-4" />
             Filter Text
-          </button>
+          </button>{" "}
           {showTextFilter && (
-            <div className="absolute left-0 z-10 mt-2 w-64 rounded border bg-white p-4 shadow-lg">
+            <div
+              ref={textFilterPopupRef}
+              className="absolute left-0 z-10 mt-2 w-64 rounded border bg-white p-4 shadow-lg"
+            >
               <div className="mb-2 text-xs font-semibold text-gray-700">
                 Where
               </div>
@@ -822,9 +870,12 @@ const AirtableClone = () => {
           >
             <Filter className="h-4 w-4" />
             Filter Number
-          </button>
+          </button>{" "}
           {showNumberFilter && (
-            <div className="absolute left-0 z-10 mt-2 w-64 rounded border bg-white p-4 shadow-lg">
+            <div
+              ref={numberFilterPopupRef}
+              className="absolute left-0 z-10 mt-2 w-64 rounded border bg-white p-4 shadow-lg"
+            >
               <div className="mb-2 text-xs font-semibold text-gray-700">
                 Where
               </div>
