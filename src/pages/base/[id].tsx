@@ -464,7 +464,6 @@ const AirtableClone = () => {
     };
   }, [showSort, showTextFilter, showNumberFilter]);
 
-  // Optimized handlers - no more refetch calls
   const handleAddColumn = () => {
     if (!base) return;
     void addColumn.mutateAsync({
@@ -472,7 +471,6 @@ const AirtableClone = () => {
       name: `Column ${base.columns.length + 1}`,
       order: base.columns.length,
     });
-    // No refetch needed - optimistic updates handle this
   };
 
   const handleAddRow = () => {
@@ -480,7 +478,7 @@ const AirtableClone = () => {
     const emptyData = Object.fromEntries(
       base.columns.map((col) => [col.id, ""])
     );
-    void addRow.mutateAsync({ baseId, data: emptyData }); // No refetch needed - optimistic updates handle this
+    void addRow.mutateAsync({ baseId, data: emptyData }); 
   };
   // Debounced cell update to prevent excessive API calls
   const handleCellValueChange = (
@@ -766,11 +764,9 @@ const AirtableClone = () => {
       </div>
     );
   }
-
   return (
     <div className="flex h-screen flex-col bg-white">
-      {" "}
-      {/* Top Header */}
+      {/* Main Header */}
       <div
         className={`flex h-16 items-center px-6 py-4 text-sm text-white ${
           getBaseColor ?? "bg-purple-500"
@@ -805,8 +801,9 @@ const AirtableClone = () => {
                   width={32}
                   height={32}
                   className="h-8 w-8 rounded-full border-2 border-white shadow"
-                />
-              </button>
+                />{" "}
+              </button>{" "}
+              {/* Profile Menu Popup */}
               {showProfileMenu && (
                 <div className="absolute right-0 z-50 mt-2 w-40 rounded bg-white py-2 shadow-lg">
                   <button
@@ -818,10 +815,11 @@ const AirtableClone = () => {
                 </div>
               )}
             </div>
-          )}
-        </div>
+          )}{" "}
+        </div>{" "}
       </div>
-      {/* Secondary Header */}
+
+      {/* Secondary Header / Actions */}
       <div
         className={`flex h-12 items-center px-4 text-sm text-white ${
           getSecondaryBaseColor ?? "bg-purple-600"
@@ -839,10 +837,11 @@ const AirtableClone = () => {
           >
             <Plus className="h-4 w-4" />
             <span>Add 1000 rows</span>
-          </div>
-        </div>
+          </div>{" "}
+        </div>{" "}
       </div>
-      {/* Controls Row: Filter, Sort, Find */}
+
+      {/* Controls Bar: Sort, Filter, Search */}
       <div className="flex items-center gap-4 border-b border-gray-200 bg-purple-50 px-4 py-3">
         <div className="relative inline-block">
           {" "}
@@ -856,8 +855,9 @@ const AirtableClone = () => {
             type="button"
           >
             <SortAsc className="h-4 w-4" />
-            Sort
+            Sort{" "}
           </button>{" "}
+          {/* Sort Popup */}
           {showSort && (
             <div
               ref={sortPopupRef}
@@ -909,8 +909,9 @@ const AirtableClone = () => {
             type="button"
           >
             <Filter className="h-4 w-4" />
-            Filter Text
+            Filter Text{" "}
           </button>{" "}
+          {/* Text Filter Popup */}
           {showTextFilter && (
             <div
               ref={textFilterPopupRef}
@@ -971,7 +972,7 @@ const AirtableClone = () => {
                             value: filterConfig.value || "",
                           },
                         }));
-                        setShowTextFilter(false); // or setShowNumberFilter(false) for number filter
+                        setShowTextFilter(false);
                         setFilterConfig({});
                       }
                     }}
@@ -1015,8 +1016,9 @@ const AirtableClone = () => {
             type="button"
           >
             <Filter className="h-4 w-4" />
-            Filter Number
+            Filter Number{" "}
           </button>{" "}
+          {/* Number Filter Popup */}
           {showNumberFilter && (
             <div
               ref={numberFilterPopupRef}
@@ -1073,7 +1075,7 @@ const AirtableClone = () => {
                             value: filterConfig.value || "",
                           },
                         }));
-                        setShowTextFilter(false); // or setShowNumberFilter(false) for number filter
+                        setShowTextFilter(false);
                         setFilterConfig({});
                       }
                     }}
@@ -1133,11 +1135,12 @@ const AirtableClone = () => {
           <span className="absolute right-2 top-2 text-gray-400">
             <Search className="h-4 w-4" />
           </span>
-        </div>
+        </div>{" "}
       </div>
       <div className="flex flex-1">
-        {/* Left Sidebar */}
+        {/* Left Sidebar: Views & Create */}
         <div className="w-64 border-r border-gray-200 bg-gray-50 p-3">
+          {" "}
           {/* Views Section */}
           <div className="mb-16">
             <div className="relative mb-3">
@@ -1166,9 +1169,8 @@ const AirtableClone = () => {
                   <Plus className="h-3 w-3" />
                 </div>
               ))}
-            </div>
-          </div>
-
+            </div>{" "}
+          </div>{" "}
           {/* Create Section */}
           <div>
             <div className="mb-3 flex items-center justify-between">
@@ -1212,10 +1214,9 @@ const AirtableClone = () => {
                 <Plus className="h-3 w-3" />
               </div>
             </div>
-          </div>
+          </div>{" "}
         </div>
-
-        {/* Main Content */}
+        {/* Main Content: Table Grid */}{" "}
         <div className="flex flex-1 flex-col">
           {/* Table Container */}
           <div ref={tableContainerRef} className="flex-1 overflow-auto">
@@ -1225,7 +1226,9 @@ const AirtableClone = () => {
               tabIndex={0}
               onKeyDown={editingCell ? undefined : handleKeyDown}
             >
+              {" "}
               <table className="w-full border-collapse">
+                {/* Table Header */}
                 <thead>
                   <tr>
                     <th className="h-10 w-12 border-b border-r border-gray-200 bg-gray-50 text-center text-xs font-medium text-gray-500">
@@ -1279,8 +1282,9 @@ const AirtableClone = () => {
                         <Plus className="h-4 w-4" />
                       </button>
                     </th>
-                  </tr>
+                  </tr>{" "}
                 </thead>
+                {/* Table Body */}
                 <tbody>
                   {sortedRows
                     .filter((row) => {
@@ -1374,10 +1378,10 @@ const AirtableClone = () => {
                   </tr>
                 </tbody>
               </table>
-            </div>
+            </div>{" "}
           </div>
 
-          {/* Bottom Status */}
+          {/* Bottom Status Bar */}
           <div className="flex h-8 items-center border-t border-gray-200 bg-white px-4">
             <span className="text-xs text-gray-500">
               {pagedRows.length} records loaded
