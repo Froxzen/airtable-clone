@@ -42,6 +42,7 @@ interface Row {
 }
 
 interface Base {
+  id?: string;
   name: string;
   columns: Column[];
   rows: Row[];
@@ -102,6 +103,47 @@ const AirtableClone = () => {
     { baseId },
     { enabled: !!baseId }
   ) as { data: Base | undefined };
+
+  // Calculate base color (same logic as dashboard)
+  const getBaseColor = useMemo(() => {
+    if (!base?.id) return "bg-purple-600";
+
+    const colors = [
+      "bg-red-600",
+      "bg-blue-600",
+      "bg-green-600",
+      "bg-purple-600",
+      "bg-yellow-600",
+      "bg-pink-600",
+      "bg-indigo-600",
+      "bg-teal-600",
+      "bg-orange-600",
+      "bg-cyan-600",
+      "bg-lime-600",
+      "bg-amber-600",
+      "bg-rose-600",
+      "bg-fuchsia-600",
+      "bg-violet-600",
+      "bg-emerald-600",
+      "bg-sky-600",
+      "bg-gray-600",
+    ];
+
+    function hashString(id: string) {
+      let hash = 0;
+      for (let i = 0; i < id.length; i++) {
+        hash = id.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      return Math.abs(hash);
+    }
+
+    return colors[hashString(base.id) % colors.length];
+  }, [base?.id]);
+
+  // Get darker variant for secondary header
+  const getBaseColorDark = useMemo(() => {
+    return getBaseColor ? getBaseColor.replace("-600", "-700") : "bg-purple-700";
+  }, [getBaseColor]);
 
   const utils = trpc.useUtils();
   const cellUpdateTimeouts = useRef(new Map<string, NodeJS.Timeout>());
@@ -690,8 +732,11 @@ const AirtableClone = () => {
 
   return (
     <div className="flex h-screen flex-col bg-white">
+      {" "}
       {/* Top Header */}
-      <div className="flex h-16 items-center bg-purple-600 px-6 py-4 text-sm text-white">
+      <div
+        className={`flex h-16 items-center px-6 py-4 text-sm text-white ${getBaseColor}`}
+      >
         <div className="flex items-center space-x-4">
           <Image
             src="/logo.svg"
@@ -737,9 +782,8 @@ const AirtableClone = () => {
           )}
         </div>
       </div>
-
       {/* Secondary Header */}
-      <div className="flex h-12 items-center bg-purple-500 px-4 text-sm text-white">
+      <div className={`flex h-12 items-center px-4 text-sm text-white ${getBaseColor}`}>
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-1">
             <span>Table 1</span>
@@ -755,7 +799,6 @@ const AirtableClone = () => {
           </div>
         </div>
       </div>
-
       {/* Controls Row: Filter, Sort, Find */}
       <div className="flex items-center gap-4 border-b border-gray-200 bg-purple-50 px-4 py-3">
         <div className="relative inline-block">
@@ -1041,7 +1084,6 @@ const AirtableClone = () => {
           </span>
         </div>
       </div>
-
       <div className="flex flex-1">
         {/* Left Sidebar */}
         <div className="w-64 border-r border-gray-200 bg-gray-50 p-3">
