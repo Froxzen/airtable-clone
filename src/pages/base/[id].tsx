@@ -25,6 +25,7 @@ import {
   Trash2,
 } from "lucide-react";
 import Image from "next/image";
+import { useVirtualizer } from "@tanstack/react-virtual";
 // import { useVirtualizer } from '@tanstack/react-virtual'
 
 // Define proper types for the data structures
@@ -89,7 +90,6 @@ const AirtableClone = () => {
     direction?: "asc" | "desc";
   }>({});
   const [showSort, setShowSort] = useState(false);
-
   const wrapperRef = useRef<HTMLDivElement>(null);
   const sortPopupRef = useRef<HTMLDivElement>(null);
   const textFilterPopupRef = useRef<HTMLDivElement>(null);
@@ -194,6 +194,12 @@ const AirtableClone = () => {
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [loadingRows, setLoadingRows] = useState(false);
+
+  const virtualizer = useVirtualizer({
+    count: pagedRows.length,
+    estimateSize: () => 40,
+    getScrollElement: () => tableContainerRef.current,
+  });
 
   const fetchRowsPage = useCallback(async () => {
     if (!baseId || loadingRows || !hasMore) return;
@@ -478,7 +484,7 @@ const AirtableClone = () => {
     const emptyData = Object.fromEntries(
       base.columns.map((col) => [col.id, ""])
     );
-    void addRow.mutateAsync({ baseId, data: emptyData }); 
+    void addRow.mutateAsync({ baseId, data: emptyData });
   };
   // Debounced cell update to prevent excessive API calls
   const handleCellValueChange = (
@@ -1215,18 +1221,22 @@ const AirtableClone = () => {
               </div>
             </div>
           </div>{" "}
-        </div>
-        {/* Main Content: Table Grid */}{" "}
+        </div>{" "}
+        {/* Main Content: Table Grid */}
         <div className="flex flex-1 flex-col">
-          {/* Table Container */}
-          <div ref={tableContainerRef} className="flex-1 overflow-auto">
+          {" "}
+          {/* Scrollable Table Container */}
+          <div
+            ref={tableContainerRef}
+            className="flex-1 overflow-auto"
+            style={{ maxHeight: "calc(100vh - 175px)" }}
+          >
             <div
               ref={wrapperRef}
               className="outline-none"
               tabIndex={0}
               onKeyDown={editingCell ? undefined : handleKeyDown}
             >
-              {" "}
               <table className="w-full border-collapse">
                 {/* Table Header */}
                 <thead>
@@ -1378,21 +1388,21 @@ const AirtableClone = () => {
                   </tr>
                 </tbody>
               </table>
-            </div>{" "}
-          </div>
-
-          {/* Bottom Status Bar */}
-          <div className="flex h-8 items-center border-t border-gray-200 bg-white px-4">
-            <span className="text-xs text-gray-500">
-              {pagedRows.length} records loaded
-              {hasMore ? " (loading more...)" : ""}
-            </span>
-            <div className="ml-auto">
-              <button className="rounded bg-gray-800 px-2 py-1 text-xs text-white">
-                Getting started
-              </button>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Bottom Status Bar */}
+      <div className="flex h-8 items-center border-t border-gray-200 bg-white px-4">
+        <span className="text-xs text-gray-500">
+          {pagedRows.length} records loaded
+          {hasMore ? " (loading more...)" : ""}
+        </span>
+        <div className="ml-auto">
+          <button className="rounded bg-gray-800 px-2 py-1 text-xs text-white">
+            Getting started
+          </button>
         </div>
       </div>
     </div>
