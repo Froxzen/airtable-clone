@@ -83,9 +83,13 @@ const Dashboard: NextPage = () => {
                 onClick={() => setShowModal(false)}
               >
                 Cancel
-              </button>
+              </button>{" "}
               <button
-                className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+                className={`rounded px-4 py-2 text-white hover:bg-blue-700 ${
+                  createBase.isLoading
+                    ? "cursor-not-allowed bg-blue-600 opacity-50"
+                    : "bg-blue-600"
+                }`}
                 onClick={handleCreateBase}
                 disabled={!baseName.trim() || createBase.isLoading}
               >
@@ -286,7 +290,9 @@ const Dashboard: NextPage = () => {
                       className="flex cursor-pointer items-center space-x-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md"
                     >
                       <div
-                        className={`flex h-12 w-12 items-center justify-center rounded-lg text-white ${color ?? "bg-gray-600"}`}
+                        className={`flex h-12 w-12 items-center justify-center rounded-lg text-white ${
+                          color ?? "bg-gray-600"
+                        }`}
                       >
                         <span className="text-md font-bold">{initials}</span>
                       </div>

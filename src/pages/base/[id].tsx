@@ -265,7 +265,7 @@ const AirtableClone = () => {
 
       return { previousPagedRows };
     },
-    onSuccess: (updatedRow, _, context) => {
+    onSuccess: (updatedRow) => {
       // Update with real data from server
       setPagedRows((prev) =>
         prev.map((row) =>
@@ -452,15 +452,16 @@ const AirtableClone = () => {
     void signOut({ redirect: false }).then(() => {
       void router.push("/");
     });
-  };  const addManyRows = trpc.base.addManyRows.useMutation({
-    onMutate: async ({ rows }) => {
+  };
+  const addManyRows = trpc.base.addManyRows.useMutation({
+    onMutate: ({ rows }) => {
       // Optimistically add rows to UI immediately
       const tempRows = rows.map((data, i) => ({
         id: `temp-row-bulk-${Date.now()}-${i}`,
         baseId,
         data,
       })) as Row[];
-      
+
       setPagedRows((prev) => [...prev, ...tempRows]);
       return { tempRows };
     },
@@ -479,28 +480,31 @@ const AirtableClone = () => {
       base.columns.map((col) => [col.id, ""])
     );
     const totalRows = 10000;
-    const BATCH_SIZE = 1000; // Larger batches for better performance
-    
+    const BATCH_SIZE = 1000;
+
     // Process batches in parallel (limit concurrency to avoid overwhelming server)
     const batches = [];
     for (let i = 0; i < totalRows; i += BATCH_SIZE) {
-      const batch = Array.from({ length: Math.min(BATCH_SIZE, totalRows - i) }, () => emptyData);
+      const batch = Array.from(
+        { length: Math.min(BATCH_SIZE, totalRows - i) },
+        () => emptyData
+      );
       batches.push(batch);
     }
-    
+
     // Process batches with limited concurrency
     const CONCURRENT_BATCHES = 3;
     for (let i = 0; i < batches.length; i += CONCURRENT_BATCHES) {
       const currentBatches = batches.slice(i, i + CONCURRENT_BATCHES);
-      
+
       // Process these batches in parallel
       await Promise.all(
-        currentBatches.map(batch => 
+        currentBatches.map((batch) =>
           addManyRows.mutateAsync({ baseId, rows: batch })
         )
       );
     }
-    
+
     // Refresh data after all batches complete
     await utils.base.getTable.invalidate({ baseId });
     setResetPagingFlag(true);
