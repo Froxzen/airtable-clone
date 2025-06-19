@@ -772,7 +772,9 @@ const AirtableClone = () => {
       {" "}
       {/* Top Header */}
       <div
-        className={`flex h-16 items-center px-6 py-4 text-sm text-white ${getBaseColor}`}
+        className={`flex h-16 items-center px-6 py-4 text-sm text-white ${
+          getBaseColor ?? "bg-purple-500"
+        }`}
       >
         <div className="flex items-center space-x-4">
           <Image
@@ -821,7 +823,9 @@ const AirtableClone = () => {
       </div>
       {/* Secondary Header */}
       <div
-        className={`flex h-12 items-center px-4 text-sm text-white ${getSecondaryBaseColor}`}
+        className={`flex h-12 items-center px-4 text-sm text-white ${
+          getSecondaryBaseColor ?? "bg-purple-600"
+        }`}
       >
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-1">
@@ -1077,7 +1081,11 @@ const AirtableClone = () => {
                   />
                 )}
               <button
-                className={`w-full rounded ${getBaseColor} py-1 text-xs font-semibold text-white hover:${getSecondaryBaseColor}`}
+                className={`w-full rounded ${
+                  getBaseColor ?? "bg-purple-500"
+                } py-1 text-xs font-semibold text-white hover:${
+                  getSecondaryBaseColor ?? "bg-purple-600"
+                }`}
                 onClick={() => {
                   if (filterConfig.columnId && filterConfig.type) {
                     setFilters((f) => ({
