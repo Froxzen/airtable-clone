@@ -62,6 +62,7 @@ const AirtableClone = () => {
     row: number;
     col: number;
   } | null>(null);
+  const [editingColumn, setEditingColumn] = useState<string | null>(null);
 
   const { data: session } = useSession();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -213,6 +214,37 @@ const AirtableClone = () => {
       }
     },
   });
+
+  const updateColumn = trpc.base.updateColumn.useMutation({
+    onMutate: async ({ columnId, name }) => {
+      // Cancel outgoing refetches
+      await utils.base.getTable.cancel({ baseId });
+
+      // Snapshot previous value
+      const previousData = utils.base.getTable.getData({ baseId });
+
+      // Optimistically update cache
+      utils.base.getTable.setData({ baseId }, (old) =>
+        old
+          ? {
+              ...old,
+              columns: old.columns.map((col) =>
+                col.id === columnId ? { ...col, name } : col
+              ),
+            }
+          : old
+      );
+
+      return { previousData };
+    },
+    onError: (_, __, context) => {
+      // Rollback on error
+      if (context?.previousData) {
+        utils.base.getTable.setData({ baseId }, context.previousData);
+      }
+    },
+  });
+
   const addRow = trpc.base.addRow.useMutation({
     onMutate: async ({ data }) => {
       // Cancel outgoing refetches
@@ -369,8 +401,7 @@ const AirtableClone = () => {
     const emptyData = Object.fromEntries(
       base.columns.map((col) => [col.id, ""])
     );
-    void addRow.mutateAsync({ baseId, data: emptyData });
-    // No refetch needed - optimistic updates handle this
+    void addRow.mutateAsync({ baseId, data: emptyData }); // No refetch needed - optimistic updates handle this
   };
   // Debounced cell update to prevent excessive API calls
   const handleCellValueChange = (
@@ -461,8 +492,7 @@ const AirtableClone = () => {
   // Handle input change for editing cells
   const handleInputChange = (rowId: string, colId: string, value: string) => {
     handleCellValueChange(rowId, colId, value);
-  };
-  // Handle ending edit mode
+  }; // Handle ending edit mode
   const handleEditEnd = () => {
     if (editingCell) {
       const row = pagedRows[editingCell.row];
@@ -487,6 +517,32 @@ const AirtableClone = () => {
     }
     setLocalCellValues({});
     setEditingCell(null);
+  };
+
+  // Handle column editing
+  const handleColumnClick = (columnId: string) => {
+    // Don't edit if it's a temporary column (still being created)
+    if (columnId.startsWith("temp-col-")) return;
+    setEditingColumn(columnId);
+  };
+
+  const handleColumnNameChange = (columnId: string, newName: string) => {
+    // Don't update if it's a temporary column (still being created)
+    if (columnId.startsWith("temp-col-")) {
+      setEditingColumn(null);
+      return;
+    }
+
+    if (
+      newName.trim() &&
+      newName !== base?.columns.find((col) => col.id === columnId)?.name
+    ) {
+      void updateColumn.mutateAsync({
+        columnId,
+        name: newName.trim(),
+      });
+    }
+    setEditingColumn(null);
   };
 
   // Handle sign out
@@ -1081,14 +1137,40 @@ const AirtableClone = () => {
                   <tr>
                     <th className="h-10 w-12 border-b border-r border-gray-200 bg-gray-50 text-center text-xs font-medium text-gray-500">
                       #
-                    </th>
+                    </th>{" "}
                     {base?.columns?.map((col) => (
                       <th
                         key={col.id}
                         className="relative h-10 min-w-[150px] border-b border-r border-gray-200 bg-gray-50 px-3 text-left text-xs font-medium text-gray-700"
                       >
                         <div className="flex items-center space-x-1">
-                          <span>{col.name}</span>
+                          {editingColumn === col.id ? (
+                            <input
+                              autoFocus
+                              className="flex-1 rounded border border-blue-500 bg-white px-2 py-1 text-xs"
+                              defaultValue={col.name}
+                              onBlur={(e) =>
+                                handleColumnNameChange(col.id, e.target.value)
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  handleColumnNameChange(
+                                    col.id,
+                                    e.currentTarget.value
+                                  );
+                                } else if (e.key === "Escape") {
+                                  setEditingColumn(null);
+                                }
+                              }}
+                            />
+                          ) : (
+                            <span
+                              className="cursor-pointer rounded px-1 py-0.5 hover:bg-gray-100"
+                              onClick={() => handleColumnClick(col.id)}
+                            >
+                              {col.name}
+                            </span>
+                          )}
                           <ChevronDown className="h-3 w-3 text-gray-400" />
                         </div>
                       </th>

@@ -100,6 +100,20 @@ export const baseRouter = createTRPCRouter({
       });
     }),
 
+  updateColumn: protectedProcedure
+    .input(
+      z.object({
+        columnId: z.string(),
+        name: z.string().min(1),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      return ctx.prisma.column.update({
+        where: { id: input.columnId },
+        data: { name: input.name },
+      });
+    }),
+
   addRow: protectedProcedure
     .input(
       z.object({
