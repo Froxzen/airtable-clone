@@ -188,7 +188,7 @@ const AirtableClone = () => {
   const isFilterActive = Object.keys(filters).length > 0;
   const isClearActive = isSortActive || isFilterActive;
 
-  const PAGE_SIZE = 25;
+  const PAGE_SIZE = 100;
   const [pagedRows, setPagedRows] = useState<Row[]>([]);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
