@@ -26,7 +26,6 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { useVirtualizer } from "@tanstack/react-virtual";
-// import { useVirtualizer } from '@tanstack/react-virtual'
 
 // Define proper types for the data structures
 interface Column {
@@ -199,6 +198,12 @@ const AirtableClone = () => {
     count: pagedRows.length,
     estimateSize: () => 40,
     getScrollElement: () => tableContainerRef.current,
+    measureElement:
+      typeof window !== "undefined" &&
+      navigator.userAgent.indexOf("Chrome") === -1
+        ? (element) => element?.getBoundingClientRect().height
+        : undefined,
+    overscan: 10,
   });
 
   const fetchRowsPage = useCallback(async () => {
@@ -690,69 +695,88 @@ const AirtableClone = () => {
     await utils.base.getTable.invalidate({ baseId });
     setResetPagingFlag(true);
   };
-
-  const filteredRows = useMemo(() => {
+  // Single computed variable that handles all filtering, sorting, and searching
+  const processedRows = useMemo(() => {
     if (!pagedRows.length) return [];
-    return pagedRows.filter((row) => {
-      // For each filter applied, check if the row matches
-      return Object.entries(filters).every(([colId, filter]) => {
-        const value = row.data[colId];
 
-        // Text filters
-        if (
-          [
-            "contains",
-            "notContains",
-            "equal",
-            "notEqual",
-            "empty",
-            "notEmpty",
-          ].includes(filter.type)
-        ) {
-          const str = (value ?? "").toString().toLowerCase();
-          const filterVal = (filter.value ?? "").toLowerCase();
-          if (filter.type === "contains") return str.includes(filterVal);
-          if (filter.type === "notContains") return !str.includes(filterVal);
-          if (filter.type === "equal") return str === filterVal;
-          if (filter.type === "notEqual") return str !== filterVal;
-          if (filter.type === "empty") return !str;
-          if (filter.type === "notEmpty") return !!str;
-        }
+    let rows = pagedRows;
 
-        // Number filters
-        if (["gt", "lt"].includes(filter.type)) {
-          const num = Number(value);
-          const filterNum = Number(filter.value);
-          if (isNaN(num) || isNaN(filterNum)) return false;
-          if (filter.type === "gt") return num > filterNum;
-          if (filter.type === "lt") return num < filterNum;
-        }
-
-        return true;
+    // Apply search filter
+    if (searchTerm) {
+      rows = rows.filter((row) => {
+        return base?.columns?.some((col) => {
+          const value = row.data[col.id];
+          return (
+            value &&
+            value.toString().toLowerCase().includes(searchTerm.toLowerCase())
+          );
+        });
       });
-    });
-  }, [pagedRows, filters]);
+    }
 
-  const sortedRows = useMemo(() => {
-    if (!filteredRows) return [];
-    if (!sortConfig.columnId || !sortConfig.direction) return filteredRows;
-    const colId = sortConfig.columnId;
-    return [...filteredRows].sort((a, b) => {
-      const aVal = a.data[colId];
-      const bVal = b.data[colId];
-      // Try number sort first, fallback to string
-      const aNum = Number(aVal);
-      const bNum = Number(bVal);
-      if (!isNaN(aNum) && !isNaN(bNum)) {
-        return sortConfig.direction === "asc" ? aNum - bNum : bNum - aNum;
-      }
-      const aStr = (aVal ?? "").toString().toLowerCase();
-      const bStr = (bVal ?? "").toString().toLowerCase();
-      if (aStr < bStr) return sortConfig.direction === "asc" ? -1 : 1;
-      if (aStr > bStr) return sortConfig.direction === "asc" ? 1 : -1;
-      return 0;
-    });
-  }, [filteredRows, sortConfig]);
+    // Apply column filters
+    if (Object.keys(filters).length > 0) {
+      rows = rows.filter((row) => {
+        return Object.entries(filters).every(([colId, filter]) => {
+          const value = row.data[colId];
+
+          // Text filters
+          if (
+            [
+              "contains",
+              "notContains",
+              "equal",
+              "notEqual",
+              "empty",
+              "notEmpty",
+            ].includes(filter.type)
+          ) {
+            const str = (value ?? "").toString().toLowerCase();
+            const filterVal = (filter.value ?? "").toLowerCase();
+            if (filter.type === "contains") return str.includes(filterVal);
+            if (filter.type === "notContains") return !str.includes(filterVal);
+            if (filter.type === "equal") return str === filterVal;
+            if (filter.type === "notEqual") return str !== filterVal;
+            if (filter.type === "empty") return !str;
+            if (filter.type === "notEmpty") return !!str;
+          }
+
+          // Number filters
+          if (["gt", "lt"].includes(filter.type)) {
+            const num = Number(value);
+            const filterNum = Number(filter.value);
+            if (isNaN(num) || isNaN(filterNum)) return false;
+            if (filter.type === "gt") return num > filterNum;
+            if (filter.type === "lt") return num < filterNum;
+          }
+
+          return true;
+        });
+      });
+    }
+
+    // Apply sorting
+    if (sortConfig.columnId && sortConfig.direction) {
+      const colId = sortConfig.columnId;
+      rows = [...rows].sort((a, b) => {
+        const aVal = a.data[colId];
+        const bVal = b.data[colId];
+        // Try number sort first, fallback to string
+        const aNum = Number(aVal);
+        const bNum = Number(bVal);
+        if (!isNaN(aNum) && !isNaN(bNum)) {
+          return sortConfig.direction === "asc" ? aNum - bNum : bNum - aNum;
+        }
+        const aStr = (aVal ?? "").toString().toLowerCase();
+        const bStr = (bVal ?? "").toString().toLowerCase();
+        if (aStr < bStr) return sortConfig.direction === "asc" ? -1 : 1;
+        if (aStr > bStr) return sortConfig.direction === "asc" ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return rows;
+  }, [pagedRows, searchTerm, filters, sortConfig, base?.columns]);
 
   if (session === undefined) {
     // Session is loading
@@ -1294,82 +1318,67 @@ const AirtableClone = () => {
                     </th>
                   </tr>{" "}
                 </thead>
-                {/* Table Body */}
+                {/* Table Body */}{" "}
                 <tbody>
-                  {sortedRows
-                    .filter((row) => {
-                      if (!searchTerm) return true;
-                      // Check if any cell contains the search term (case-insensitive)
-                      return base?.columns?.some((col) => {
-                        const value = row.data[col.id];
+                  {processedRows.map((row, rowIdx) => (
+                    <tr key={row.id} className="hover:bg-gray-50">
+                      <td className="h-10 w-12 border-b border-r border-gray-200 bg-gray-50 text-center text-xs text-gray-500">
+                        {rowIdx + 1}
+                      </td>
+                      {base?.columns.map((col, colIdx) => {
+                        const isSelected =
+                          selectedCell?.row === rowIdx &&
+                          selectedCell?.col === colIdx;
+                        const isEditing =
+                          editingCell?.row === rowIdx &&
+                          editingCell?.col === colIdx;
+                        const value = getCellValue(row, col.id);
+                        const isTempRow = row.id.startsWith("temp-row-");
                         return (
-                          typeof value === "string" &&
-                          value.toLowerCase().includes(searchTerm.toLowerCase())
-                        );
-                      });
-                    })
-                    .map((row, rowIdx) => (
-                      <tr key={row.id} className="hover:bg-gray-50">
-                        <td className="h-10 w-12 border-b border-r border-gray-200 bg-gray-50 text-center text-xs text-gray-500">
-                          {rowIdx + 1}
-                        </td>
-                        {base?.columns.map((col, colIdx) => {
-                          const isSelected =
-                            selectedCell?.row === rowIdx &&
-                            selectedCell?.col === colIdx;
-                          const isEditing =
-                            editingCell?.row === rowIdx &&
-                            editingCell?.col === colIdx;
-                          const value = getCellValue(row, col.id);
-                          const isTempRow = row.id.startsWith("temp-row-");
-                          return (
-                            <td
-                              key={col.id}
-                              className={`relative h-10 cursor-pointer border-b border-r border-gray-200 px-3 ${
-                                isSelected || isEditing
-                                  ? "bg-white shadow-[inset_0_0_0_3px_#3b82f6]"
-                                  : ""
-                              }`}
-                              onClick={() => handleCellClick(rowIdx, colIdx)}
-                              onDoubleClick={() =>
-                                handleCellDoubleClick(rowIdx, colIdx)
-                              }
-                            >
-                              {isEditing ? (
-                                <input
-                                  disabled={isTempRow}
-                                  className="absolute inset-0 h-full w-full border-none bg-white px-3 py-0 text-sm outline-none"
-                                  autoFocus
-                                  value={value}
-                                  onChange={(e) =>
-                                    handleInputChange(
-                                      row.id,
-                                      col.id,
-                                      e.target.value
-                                    )
+                          <td
+                            key={col.id}
+                            className={`relative h-10 cursor-pointer border-b border-r border-gray-200 px-3 ${
+                              isSelected || isEditing
+                                ? "bg-white shadow-[inset_0_0_0_3px_#3b82f6]"
+                                : ""
+                            }`}
+                            onClick={() => handleCellClick(rowIdx, colIdx)}
+                            onDoubleClick={() =>
+                              handleCellDoubleClick(rowIdx, colIdx)
+                            }
+                          >
+                            {isEditing ? (
+                              <input
+                                disabled={isTempRow}
+                                className="absolute inset-0 h-full w-full border-none bg-white px-3 py-0 text-sm outline-none"
+                                autoFocus
+                                value={value}
+                                onChange={(e) =>
+                                  handleInputChange(
+                                    row.id,
+                                    col.id,
+                                    e.target.value
+                                  )
+                                }
+                                onBlur={handleEditEnd}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === "Escape") {
+                                    e.preventDefault();
+                                    handleEditEnd();
                                   }
-                                  onBlur={handleEditEnd}
-                                  onKeyDown={(e) => {
-                                    if (
-                                      e.key === "Enter" ||
-                                      e.key === "Escape"
-                                    ) {
-                                      e.preventDefault();
-                                      handleEditEnd();
-                                    }
-                                  }}
-                                />
-                              ) : (
-                                <div className="truncate text-sm text-gray-700">
-                                  {value}
-                                </div>
-                              )}
-                            </td>
-                          );
-                        })}
-                        <td className="h-10 w-8 border-b border-gray-200"></td>
-                      </tr>
-                    ))}
+                                }}
+                              />
+                            ) : (
+                              <div className="truncate text-sm text-gray-700">
+                                {value}
+                              </div>
+                            )}
+                          </td>
+                        );
+                      })}
+                      <td className="h-10 w-8 border-b border-gray-200"></td>
+                    </tr>
+                  ))}
                   <tr>
                     <td
                       colSpan={(base?.columns?.length ?? 0) + 2}
@@ -1395,8 +1404,9 @@ const AirtableClone = () => {
 
       {/* Bottom Status Bar */}
       <div className="flex h-8 items-center border-t border-gray-200 bg-white px-4">
+        {" "}
         <span className="text-xs text-gray-500">
-          {pagedRows.length} records loaded
+          {processedRows.length} of {pagedRows.length} records shown
           {hasMore ? " (loading more...)" : ""}
         </span>
         <div className="ml-auto">
