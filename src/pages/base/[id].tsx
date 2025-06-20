@@ -188,11 +188,12 @@ const AirtableClone = () => {
   const isFilterActive = Object.keys(filters).length > 0;
   const isClearActive = isSortActive || isFilterActive;
 
-  const PAGE_SIZE = 100;
+  const PAGE_SIZE = 25;
   const [pagedRows, setPagedRows] = useState<Row[]>([]);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [loadingRows, setLoadingRows] = useState(false);
+  const [isBulkAdding, setIsBulkAdding] = useState(false);
 
   const rowVirtualizer = useVirtualizer({
     count: pagedRows.length,
@@ -633,19 +634,7 @@ const AirtableClone = () => {
       void router.push("/");
     });
   };
-  const addManyRows = trpc.base.addManyRows.useMutation({
-    onMutate: ({ rows }) => {
-      // Optimistically add rows to UI immediately
-      const tempRows = rows.map((data, i) => ({
-        id: `temp-row-bulk-${Date.now()}-${i}`,
-        baseId,
-        data,
-      })) as Row[];
-
-      setPagedRows((prev) => [...prev, ...tempRows]);
-      return { tempRows };
-    },
-  });
+  const addManyRows = trpc.base.addManyRows.useMutation({});
   useEffect(() => {
     if (resetPagingFlag) {
       setPagedRows([]);
@@ -654,15 +643,17 @@ const AirtableClone = () => {
       setResetPagingFlag(false);
     }
   }, [resetPagingFlag]);
-  const handleAddFiveRows = async () => {
+  const handleAddManyRows = async () => {
     if (!base) return;
+
+    setIsBulkAdding(true);
+
     const emptyData = Object.fromEntries(
       base.columns.map((col) => [col.id, ""])
     );
-    const totalRows = 1000;
-    const BATCH_SIZE = 100;
+    const totalRows = 10000;
+    const BATCH_SIZE = 500;
 
-    // Process batches in parallel
     const batches = [];
     for (let i = 0; i < totalRows; i += BATCH_SIZE) {
       const batch = Array.from(
@@ -672,12 +663,10 @@ const AirtableClone = () => {
       batches.push(batch);
     }
 
-    // Process batches with limited concurrency
     const CONCURRENT_BATCHES = 3;
     for (let i = 0; i < batches.length; i += CONCURRENT_BATCHES) {
       const currentBatches = batches.slice(i, i + CONCURRENT_BATCHES);
 
-      // Process these batches in parallel
       await Promise.all(
         currentBatches.map((batch) =>
           addManyRows.mutateAsync({ baseId, rows: batch })
@@ -685,9 +674,9 @@ const AirtableClone = () => {
       );
     }
 
-    // Refresh data after all batches complete
     await utils.base.getTable.invalidate({ baseId });
     setResetPagingFlag(true);
+    setIsBulkAdding(false);
   };
   // Single computed variable that handles all filtering, sorting, and searching
   const processedRows = useMemo(() => {
@@ -856,11 +845,11 @@ const AirtableClone = () => {
           <div
             className="flex cursor-pointer items-center space-x-1 rounded bg-white/20 px-2 py-1 hover:bg-white/30"
             onClick={() => {
-              void handleAddFiveRows();
+              void handleAddManyRows();
             }}
           >
             <Plus className="h-4 w-4" />
-            <span>Add 1000 rows</span>
+            <span>Add 10k rows</span>
           </div>{" "}
         </div>{" "}
       </div>
