@@ -194,17 +194,27 @@ const AirtableClone = () => {
   const [hasMore, setHasMore] = useState(true);
   const [loadingRows, setLoadingRows] = useState(false);
 
-  const virtualizer = useVirtualizer({
+  const rowVirtualizer = useVirtualizer({
     count: pagedRows.length,
     estimateSize: () => 40,
     getScrollElement: () => tableContainerRef.current,
-    measureElement:
-      typeof window !== "undefined" &&
-      navigator.userAgent.indexOf("Chrome") === -1
-        ? (element) => element?.getBoundingClientRect().height
-        : undefined,
     overscan: 10,
   });
+  // Detect end of scroll to trigger loading more rows
+  useEffect(() => {
+    const lastItem = rowVirtualizer.getVirtualItems().at(-1);
+    if (!lastItem) return;
+
+    // When we're near the end and can load more, increment page
+    if (lastItem.index >= pagedRows.length - 1 && hasMore && !loadingRows) {
+      setPage((prev) => prev + 1);
+    }
+  }, [
+    rowVirtualizer.getVirtualItems(),
+    pagedRows.length,
+    hasMore,
+    loadingRows,
+  ]);
 
   const fetchRowsPage = useCallback(async () => {
     if (!baseId || loadingRows || !hasMore) return;
@@ -1318,67 +1328,82 @@ const AirtableClone = () => {
                     </th>
                   </tr>{" "}
                 </thead>
-                {/* Table Body */}{" "}
-                <tbody>
-                  {processedRows.map((row, rowIdx) => (
-                    <tr key={row.id} className="hover:bg-gray-50">
-                      <td className="h-10 w-12 border-b border-r border-gray-200 bg-gray-50 text-center text-xs text-gray-500">
-                        {rowIdx + 1}
-                      </td>
-                      {base?.columns.map((col, colIdx) => {
-                        const isSelected =
-                          selectedCell?.row === rowIdx &&
-                          selectedCell?.col === colIdx;
-                        const isEditing =
-                          editingCell?.row === rowIdx &&
-                          editingCell?.col === colIdx;
-                        const value = getCellValue(row, col.id);
-                        const isTempRow = row.id.startsWith("temp-row-");
-                        return (
-                          <td
-                            key={col.id}
-                            className={`relative h-10 cursor-pointer border-b border-r border-gray-200 px-3 ${
-                              isSelected || isEditing
-                                ? "bg-white shadow-[inset_0_0_0_3px_#3b82f6]"
-                                : ""
-                            }`}
-                            onClick={() => handleCellClick(rowIdx, colIdx)}
-                            onDoubleClick={() =>
-                              handleCellDoubleClick(rowIdx, colIdx)
-                            }
-                          >
-                            {isEditing ? (
-                              <input
-                                disabled={isTempRow}
-                                className="absolute inset-0 h-full w-full border-none bg-white px-3 py-0 text-sm outline-none"
-                                autoFocus
-                                value={value}
-                                onChange={(e) =>
-                                  handleInputChange(
-                                    row.id,
-                                    col.id,
-                                    e.target.value
-                                  )
-                                }
-                                onBlur={handleEditEnd}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter" || e.key === "Escape") {
-                                    e.preventDefault();
-                                    handleEditEnd();
+                {/* Table Body */}
+                <tbody
+                  style={{
+                    height: `${rowVirtualizer.getTotalSize()}px`,
+                    position: "relative",
+                  }}
+                >
+                  {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                    const rowIdx = virtualRow.index;
+                    const row = processedRows[rowIdx];
+
+                    if (!row) return null;
+
+                    return (
+                      <tr key={row.id} className="hover:bg-gray-50">
+                        <td className="h-10 w-12 border-b border-r border-gray-200 bg-gray-50 text-center text-xs text-gray-500">
+                          {rowIdx + 1}
+                        </td>
+                        {base?.columns.map((col, colIdx) => {
+                          const isSelected =
+                            selectedCell?.row === rowIdx &&
+                            selectedCell?.col === colIdx;
+                          const isEditing =
+                            editingCell?.row === rowIdx &&
+                            editingCell?.col === colIdx;
+                          const value = getCellValue(row, col.id);
+                          const isTempRow = row.id.startsWith("temp-row-");
+                          return (
+                            <td
+                              key={col.id}
+                              className={`relative h-10 cursor-pointer border-b border-r border-gray-200 px-3 ${
+                                isSelected || isEditing
+                                  ? "bg-white shadow-[inset_0_0_0_3px_#3b82f6]"
+                                  : ""
+                              }`}
+                              onClick={() => handleCellClick(rowIdx, colIdx)}
+                              onDoubleClick={() =>
+                                handleCellDoubleClick(rowIdx, colIdx)
+                              }
+                            >
+                              {isEditing ? (
+                                <input
+                                  disabled={isTempRow}
+                                  className="absolute inset-0 h-full w-full border-none bg-white px-3 py-0 text-sm outline-none"
+                                  autoFocus
+                                  value={value}
+                                  onChange={(e) =>
+                                    handleInputChange(
+                                      row.id,
+                                      col.id,
+                                      e.target.value
+                                    )
                                   }
-                                }}
-                              />
-                            ) : (
-                              <div className="truncate text-sm text-gray-700">
-                                {value}
-                              </div>
-                            )}
-                          </td>
-                        );
-                      })}
-                      <td className="h-10 w-8 border-b border-gray-200"></td>
-                    </tr>
-                  ))}
+                                  onBlur={handleEditEnd}
+                                  onKeyDown={(e) => {
+                                    if (
+                                      e.key === "Enter" ||
+                                      e.key === "Escape"
+                                    ) {
+                                      e.preventDefault();
+                                      handleEditEnd();
+                                    }
+                                  }}
+                                />
+                              ) : (
+                                <div className="truncate text-sm text-gray-700">
+                                  {value}
+                                </div>
+                              )}
+                            </td>
+                          );
+                        })}
+                        <td className="h-10 w-8 border-b border-gray-200"></td>
+                      </tr>
+                    );
+                  })}
                   <tr>
                     <td
                       colSpan={(base?.columns?.length ?? 0) + 2}
