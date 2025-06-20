@@ -200,25 +200,26 @@ const AirtableClone = () => {
     getScrollElement: () => tableContainerRef.current,
     overscan: 10,
   });
-  // Detect end of scroll to trigger loading more rows
-  useEffect(() => {
-    const lastItem = rowVirtualizer.getVirtualItems().at(-1);
-    if (!lastItem) return;
 
-    // When we're near the end and can load more, increment page
-    if (lastItem.index >= pagedRows.length - 1 && hasMore && !loadingRows) {
+  const virtualItems = rowVirtualizer.getVirtualItems();
+  const lastItem = virtualItems.at(-1);
+  const lastItemIndex = lastItem?.index ?? 0;
+
+  useEffect(() => {
+    if (
+      pagedRows.length > 0 &&
+      lastItemIndex >= pagedRows.length - 5 &&
+      hasMore &&
+      !loadingRows
+    ) {
       setPage((prev) => prev + 1);
     }
-  }, [
-    rowVirtualizer.getVirtualItems(),
-    pagedRows.length,
-    hasMore,
-    loadingRows,
-  ]);
+  }, [lastItemIndex, pagedRows.length, hasMore, loadingRows]);
 
   const fetchRowsPage = useCallback(async () => {
     if (!baseId || loadingRows || !hasMore) return;
     setLoadingRows(true);
+
     const rows = await utils.base.getRowsPage.fetch({
       baseId,
       offset: page * PAGE_SIZE,
@@ -253,25 +254,8 @@ const AirtableClone = () => {
     void fetchRowsPage();
     // eslint-disable-next-line
   }, [page, fetchRowsPage]);
-
-  // Scroll handler
+  // Scroll container ref for virtualizer
   const tableContainerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      const el = tableContainerRef.current;
-      if (!el || loadingRows || !hasMore) return;
-      // Only trigger when we're within 50px of the bottom
-      if (el.scrollTop + el.clientHeight >= el.scrollHeight - 50) {
-        setPage((p) => p + 1);
-      }
-    };
-    const el = tableContainerRef.current;
-    if (el) {
-      el.addEventListener("scroll", handleScroll);
-      return () => el.removeEventListener("scroll", handleScroll);
-    }
-  }, [loadingRows, hasMore]);
 
   // Optimized mutations with proper cache updates
   const addColumn = trpc.base.addColumn.useMutation({
@@ -676,7 +660,7 @@ const AirtableClone = () => {
       base.columns.map((col) => [col.id, ""])
     );
     const totalRows = 1000;
-    const BATCH_SIZE = 500;
+    const BATCH_SIZE = 100;
 
     // Process batches in parallel
     const batches = [];
@@ -1342,8 +1326,19 @@ const AirtableClone = () => {
                     if (!row) return null;
 
                     return (
-                      <tr key={row.id} className="hover:bg-gray-50">
-                        <td className="h-10 w-12 border-b border-r border-gray-200 bg-gray-50 text-center text-xs text-gray-500">
+                      <tr
+                        key={row.id}
+                        className="flex hover:bg-gray-50"
+                        style={{
+                          position: "absolute",
+                          top: 0,
+                          left: 0,
+                          width: "100%",
+                          height: `${virtualRow.size}px`,
+                          transform: `translateY(${virtualRow.start}px)`,
+                        }}
+                      >
+                        <td className="flex h-10 w-12 flex-shrink-0 items-center justify-center border-b border-r border-gray-200 bg-gray-50 text-center text-xs text-gray-500">
                           {rowIdx + 1}
                         </td>
                         {base?.columns.map((col, colIdx) => {
@@ -1358,11 +1353,12 @@ const AirtableClone = () => {
                           return (
                             <td
                               key={col.id}
-                              className={`relative h-10 cursor-pointer border-b border-r border-gray-200 px-3 ${
+                              className={`relative flex h-10 flex-shrink-0 cursor-pointer items-center border-b border-r border-gray-200 px-3 ${
                                 isSelected || isEditing
                                   ? "bg-white shadow-[inset_0_0_0_3px_#3b82f6]"
                                   : ""
                               }`}
+                              style={{ minWidth: "150px", flex: "1" }}
                               onClick={() => handleCellClick(rowIdx, colIdx)}
                               onDoubleClick={() =>
                                 handleCellDoubleClick(rowIdx, colIdx)
@@ -1400,10 +1396,12 @@ const AirtableClone = () => {
                             </td>
                           );
                         })}
-                        <td className="h-10 w-8 border-b border-gray-200"></td>
+                        <td className="h-10 w-8 flex-shrink-0 border-b border-r border-gray-200"></td>
                       </tr>
                     );
                   })}
+                </tbody>
+                <tfoot>
                   <tr>
                     <td
                       colSpan={(base?.columns?.length ?? 0) + 2}
@@ -1420,7 +1418,7 @@ const AirtableClone = () => {
                       </button>
                     </td>
                   </tr>
-                </tbody>
+                </tfoot>
               </table>
             </div>
           </div>
