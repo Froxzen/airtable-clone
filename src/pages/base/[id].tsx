@@ -1285,19 +1285,21 @@ const AirtableClone = () => {
               tabIndex={0}
               onKeyDown={editingCell ? undefined : handleKeyDown}
             >
-              <table className="w-full border-collapse">
+              {" "}
+              <table className="border-collapse">
                 {/* Table Header */}
                 <thead>
-                  <tr>
-                    <th className="h-10 w-12 border-b border-r border-gray-200 bg-gray-50 text-center text-xs font-medium text-gray-500">
+                  {" "}
+                  <tr className="flex">
+                    <th className="flex h-10 w-12 flex-shrink-0 items-center justify-center border-b border-r border-gray-200 bg-gray-50 text-center text-xs font-medium text-gray-500">
                       #
                     </th>{" "}
                     {base?.columns?.map((col) => (
                       <th
                         key={col.id}
-                        className="relative h-10 min-w-[150px] border-b border-r border-gray-200 bg-gray-50 px-3 text-left text-xs font-medium text-gray-700"
+                        className="relative h-10 w-48 flex-shrink-0 border-b border-r border-gray-200 bg-gray-50 px-3 text-left text-xs font-medium text-gray-700"
                       >
-                        <div className="flex items-center space-x-1">
+                        <div className="flex h-full items-center space-x-1">
                           {editingColumn === col.id ? (
                             <input
                               autoFocus
@@ -1329,17 +1331,19 @@ const AirtableClone = () => {
                         </div>
                       </th>
                     ))}{" "}
-                    <th className="relative h-10 w-8 border-b border-gray-200 bg-gray-50 text-center">
-                      <button
-                        ref={addColumnButtonRef}
-                        onClick={() => setShowAddColumnPopup((p) => !p)}
-                        disabled={addColumn.isLoading}
-                        className="mx-auto flex h-6 w-6 items-center justify-center rounded text-blue-500 hover:bg-blue-50 disabled:opacity-50"
-                        title="Add column"
-                        type="button"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </button>
+                    <th className="relative h-10 w-8 flex-shrink-0 border-b border-gray-200 bg-gray-50">
+                      <div className="flex h-full items-center justify-center">
+                        <button
+                          ref={addColumnButtonRef}
+                          onClick={() => setShowAddColumnPopup((p) => !p)}
+                          disabled={addColumn.isLoading}
+                          className="flex h-6 w-6 items-center justify-center rounded text-blue-500 hover:bg-blue-50 disabled:opacity-50"
+                          title="Add column"
+                          type="button"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+                      </div>
                       {/* Add Column Popup */}
                       {showAddColumnPopup && (
                         <div
@@ -1393,6 +1397,7 @@ const AirtableClone = () => {
                           transform: `translateY(${virtualRow.start}px)`,
                         }}
                       >
+                        {" "}
                         <td className="flex h-10 w-12 flex-shrink-0 items-center justify-center border-b border-r border-gray-200 bg-gray-50 text-center text-xs text-gray-500">
                           {rowIdx + 1}
                         </td>
@@ -1408,12 +1413,11 @@ const AirtableClone = () => {
                           return (
                             <td
                               key={col.id}
-                              className={`relative flex h-10 flex-shrink-0 cursor-pointer items-center border-b border-r border-gray-200 px-3 ${
+                              className={`relative flex h-10 w-48 flex-shrink-0 cursor-pointer items-center border-b border-r border-gray-200 px-3 ${
                                 isSelected || isEditing
                                   ? "bg-white shadow-[inset_0_0_0_3px_#3b82f6]"
                                   : ""
                               }`}
-                              style={{ minWidth: "150px", flex: "1" }}
                               onClick={() => handleCellClick(rowIdx, colIdx)}
                               onDoubleClick={() =>
                                 handleCellDoubleClick(rowIdx, colIdx)
