@@ -194,6 +194,13 @@ const AirtableClone = () => {
   const [hasMore, setHasMore] = useState(true);
   const [loadingRows, setLoadingRows] = useState(false);
   const [isBulkAdding, setIsBulkAdding] = useState(false);
+  const fetchingNextPageRef = useRef(false);
+
+  // Add refs for page and hasMore to use in useCallback without adding them as dependencies.
+  const pageRef = useRef(page);
+  pageRef.current = page;
+  const hasMoreRef = useRef(hasMore);
+  hasMoreRef.current = hasMore;
 
   const rowVirtualizer = useVirtualizer({
     count: pagedRows.length,
@@ -218,30 +225,38 @@ const AirtableClone = () => {
   }, [lastItemIndex, pagedRows.length, hasMore, loadingRows]);
 
   const fetchRowsPage = useCallback(async () => {
-    if (!baseId || loadingRows || !hasMore) return;
+    if (!baseId || fetchingNextPageRef.current || !hasMoreRef.current) return;
+
+    fetchingNextPageRef.current = true;
     setLoadingRows(true);
 
-    const rows = await utils.base.getRowsPage.fetch({
-      baseId,
-      offset: page * PAGE_SIZE,
-      limit: PAGE_SIZE,
-    });
-    // Ensure each row's data is a Record<string, unknown>
-    const normalizedRows: Row[] = rows.map((row: ApiRow) => ({
-      ...row,
-      data: row.data && typeof row.data === "object" ? row.data : {},
-    })) as Row[];
+    try {
+      const rows = await utils.base.getRowsPage.fetch({
+        baseId,
+        offset: pageRef.current * PAGE_SIZE,
+        limit: PAGE_SIZE,
+      });
+      // Ensure each row's data is a Record<string, unknown>
+      const normalizedRows: Row[] = rows.map((row: ApiRow) => ({
+        ...row,
+        data: row.data && typeof row.data === "object" ? row.data : {},
+      })) as Row[];
 
-    // Don't add duplicates - check if rows already exist
-    setPagedRows((prev) => {
-      const existingIds = new Set(prev.map((r) => r.id));
-      const newRows = normalizedRows.filter((row) => !existingIds.has(row.id));
-      return [...prev, ...newRows];
-    });
+      // Don't add duplicates - check if rows already exist
+      setPagedRows((prev) => {
+        const existingIds = new Set(prev.map((r) => r.id));
+        const newRows = normalizedRows.filter(
+          (row) => !existingIds.has(row.id)
+        );
+        return [...prev, ...newRows];
+      });
 
-    setHasMore(rows.length === PAGE_SIZE);
-    setLoadingRows(false);
-  }, [baseId, page, loadingRows, hasMore, utils.base.getRowsPage]);
+      setHasMore(rows.length === PAGE_SIZE);
+    } finally {
+      setLoadingRows(false);
+      fetchingNextPageRef.current = false;
+    }
+  }, [baseId, utils.base.getRowsPage]);
 
   const [resetPagingFlag, setResetPagingFlag] = useState(false);
   // Initial load
@@ -385,7 +400,7 @@ const AirtableClone = () => {
 
       return { previousPagedRows };
     },
-    onSuccess: (updatedRow) => {
+    onSuccess: (updatedRow, _variables, context) => {
       // Update with real data from server
       setPagedRows((prev) =>
         prev.map((row) =>
@@ -401,7 +416,7 @@ const AirtableClone = () => {
         )
       );
     },
-    onError: (_, __, context) => {
+    onError: (_error, _variables, context) => {
       // Rollback on error
       if (context?.previousPagedRows) {
         setPagedRows(context.previousPagedRows);
