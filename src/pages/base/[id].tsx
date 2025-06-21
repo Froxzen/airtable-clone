@@ -217,7 +217,7 @@ const AirtableClone = () => {
           ...row,
           data:
             row.data && typeof row.data === "object" && !Array.isArray(row.data)
-              ? (row.data)
+              ? row.data
               : {},
         }))
       ) ?? [],
@@ -355,19 +355,26 @@ const AirtableClone = () => {
       };
 
       utils.base.getRowsInfinite.setInfiniteData(queryKey, (old) => {
-        if (!old) {
+        if (!old || old.pages.length === 0) {
           return {
             pages: [{ rows: [tempRow], nextCursor: undefined }],
             pageParams: [undefined],
           };
         }
-        const newFirstPage = {
-          rows: [tempRow, ...(old.pages[0]?.rows ?? [])],
-          nextCursor: old.pages[0]?.nextCursor,
-        };
+
+        const newPages = [...old.pages];
+        const lastPage = newPages[newPages.length - 1];
+
+        if (lastPage) {
+          newPages[newPages.length - 1] = {
+            ...lastPage,
+            rows: [...lastPage.rows, tempRow],
+          };
+        }
+
         return {
           ...old,
-          pages: [newFirstPage, ...(old.pages.slice(1) ?? [])],
+          pages: newPages,
         };
       });
       return { previousData, tempId };
@@ -634,7 +641,7 @@ const AirtableClone = () => {
       const row = allRows.find((r) => r.id === rowId);
       if (!row) return;
 
-      const dataObj = (row.data ?? {});
+      const dataObj = row.data ?? {};
       const newData = { ...dataObj, [colId]: value };
 
       void updateRow.mutateAsync({ rowId, data: newData });
@@ -1479,7 +1486,7 @@ const AirtableClone = () => {
                           </div>
                         </th>
                       ))}{" "}
-                      <th className="sticky right-0 z-10 w-12 flex-shrink-0 border-b border-l border-gray-200 bg-gray-50 p-0">
+                      <th className="sticky right-0 z-10 w-12 flex-shrink-0 border-b border-l border-r border-gray-200 bg-gray-50 p-0">
                         <button
                           ref={addColumnButtonRef}
                           onClick={() => {
@@ -1591,7 +1598,7 @@ const AirtableClone = () => {
                         <button
                           onClick={handleAddRow}
                           disabled={addRow.isLoading}
-                          className="flex h-6 w-6 items-center justify-center rounded text-blue-500 hover:bg-blue-50 disabled:opacity-50"
+                          className="flex h-6 w-6 items-center justify-center rounded text-gray-500 disabled:opacity-50"
                           title="Add row"
                           type="button"
                         >
