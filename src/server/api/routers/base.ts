@@ -85,7 +85,12 @@ export const baseRouter = createTRPCRouter({
 
   addColumn: protectedProcedure
     .input(
-      z.object({ baseId: z.string(), name: z.string(), order: z.number(), type: z.nativeEnum(ColumnType) })
+      z.object({
+        baseId: z.string(),
+        name: z.string(),
+        order: z.number(),
+        type: z.nativeEnum(ColumnType),
+      })
     )
     .mutation(async ({ ctx, input }) => {
       return ctx.prisma.column.create({
@@ -93,7 +98,7 @@ export const baseRouter = createTRPCRouter({
           baseId: input.baseId,
           name: input.name,
           order: input.order,
-          type: input.type
+          type: input.type,
         },
       });
     }),
@@ -143,18 +148,15 @@ export const baseRouter = createTRPCRouter({
       });
       return { success: true };
     }),
-  getRowsPage: protectedProcedure
+  getRowsInfinite: protectedProcedure
     .input(
       z.object({
         baseId: z.string(),
-        offset: z.number(),
         limit: z.number(),
+        cursor: z.string().nullish(), // cursor can be a string or null
         searchTerm: z.string().optional(),
         filters: z
-          .record(
-            z.string(),
-            z.object({ type: z.string(), value: z.string() })
-          )
+          .record(z.string(), z.object({ type: z.string(), value: z.string() }))
           .optional(),
         sortConfig: z
           .object({ columnId: z.string(), direction: z.enum(["asc", "desc"]) })
@@ -162,7 +164,7 @@ export const baseRouter = createTRPCRouter({
       })
     )
     .query(async ({ ctx, input }) => {
-      const { baseId, offset, limit, searchTerm, filters, sortConfig } = input;
+      const { baseId, limit, cursor, searchTerm, filters, sortConfig } = input;
 
       const where: Prisma.RowWhereInput = { baseId };
       const whereConditions: Prisma.RowWhereInput[] = [];
@@ -269,9 +271,6 @@ export const baseRouter = createTRPCRouter({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let orderBy: any = { id: "asc" };
       if (sortConfig?.columnId && sortConfig?.direction) {
-        // The generated Prisma type for `RowOrderByWithRelationInput` does not correctly
-        // reflect the ability to sort by a nested JSON field path, so we use `as any`
-        // here to bypass the type checker. This is a known limitation in some cases.
         orderBy = {
           data: {
             path: [sortConfig.columnId],
@@ -285,10 +284,20 @@ export const baseRouter = createTRPCRouter({
         where,
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         orderBy,
-        skip: offset,
-        take: limit,
+        cursor: cursor ? { id: cursor } : undefined,
+        take: limit + 1, // get an extra item to see if there's a next page
       });
-      return rows;
+
+      let nextCursor: string | undefined = undefined;
+      if (rows.length > limit) {
+        const nextItem = rows.pop(); // return the correct number of items
+        nextCursor = nextItem?.id;
+      }
+
+      return {
+        rows,
+        nextCursor,
+      };
     }),
   updateRow: protectedProcedure
     .input(z.object({ rowId: z.string(), data: z.record(z.string(), z.any()) }))

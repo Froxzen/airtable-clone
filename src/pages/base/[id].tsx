@@ -6,6 +6,7 @@ import React, {
   useCallback,
 } from "react";
 import { trpc } from "~/utils/api";
+import { useInView } from "react-intersection-observer";
 import { useRouter } from "next/router";
 import { useSession, signOut } from "next-auth/react";
 import {
@@ -27,6 +28,7 @@ import {
 import { Bars3BottomLeftIcon, HashtagIcon } from "@heroicons/react/24/outline";
 import Image from "next/image";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { type Prisma } from "@prisma/client";
 
 // Define proper types for the data structures
 interface Column {
@@ -37,23 +39,10 @@ interface Column {
   type: "TEXT" | "NUMBER";
 }
 
-interface Row {
-  id: string;
-  baseId: string;
-  data: Record<string, unknown>;
-}
-
 interface Base {
   id?: string;
   name: string;
   columns: Column[];
-  rows: Row[];
-}
-
-interface ApiRow {
-  id: string;
-  baseId: string;
-  data: unknown; // This matches what comes from your API
 }
 
 const AirtableClone = () => {
@@ -191,93 +180,83 @@ const AirtableClone = () => {
   const isFilterActive = Object.keys(filters).length > 0;
   const isClearActive = isSortActive || isFilterActive;
 
-  const PAGE_SIZE = 100;
-  const [pagedRows, setPagedRows] = useState<Row[]>([]);
-  const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
-  const [loadingRows, setLoadingRows] = useState(false);
+  const PAGE_SIZE = 250;
   const [isBulkAdding, setIsBulkAdding] = useState(false);
-  const fetchingNextPageRef = useRef(false);
   const [showAddColumnPopup, setShowAddColumnPopup] = useState(false);
   const addColumnButtonRef = useRef<HTMLButtonElement>(null);
   const addColumnPopupRef = useRef<HTMLDivElement>(null);
 
-  // Add refs for page and hasMore to use in useCallback without adding them as dependencies.
-  const pageRef = useRef(page);
-  pageRef.current = page;
-  const hasMoreRef = useRef(hasMore);
-  hasMoreRef.current = hasMore;
+  const {
+    data: infiniteData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+  } = trpc.base.getRowsInfinite.useInfiniteQuery(
+    {
+      baseId,
+      limit: PAGE_SIZE,
+      searchTerm,
+      filters,
+      sortConfig:
+        sortConfig.columnId && sortConfig.direction
+          ? { columnId: sortConfig.columnId, direction: sortConfig.direction }
+          : undefined,
+    },
+    {
+      enabled: !!baseId,
+      getNextPageParam: (lastPage) => lastPage.nextCursor,
+      keepPreviousData: true,
+    }
+  );
+
+  const allRows = useMemo(
+    () =>
+      infiniteData?.pages.flatMap((page) =>
+        page.rows.map((row) => ({
+          ...row,
+          data:
+            row.data && typeof row.data === "object" && !Array.isArray(row.data)
+              ? (row.data as Prisma.JsonObject)
+              : {},
+        }))
+      ) ?? [],
+    [infiniteData]
+  );
+
+  type Row = (typeof allRows)[number];
+
+  const tableContainerRef = useRef<HTMLDivElement>(null);
 
   const rowVirtualizer = useVirtualizer({
-    count: pagedRows.length,
+    count: allRows.length,
     estimateSize: () => 40,
     getScrollElement: () => tableContainerRef.current,
     overscan: 10,
   });
 
   const virtualItems = rowVirtualizer.getVirtualItems();
-  const lastItem = virtualItems.at(-1);
-  const lastItemIndex = lastItem?.index ?? 0;
 
   useEffect(() => {
+    const lastItem = virtualItems[virtualItems.length - 1];
+    if (!lastItem) {
+      return;
+    }
+
     if (
-      pagedRows.length > 0 &&
-      lastItemIndex >= pagedRows.length - 5 &&
-      hasMore &&
-      !loadingRows
+      lastItem.index >= allRows.length - 5 &&
+      hasNextPage &&
+      !isFetchingNextPage
     ) {
-      setPage((prev) => prev + 1);
+      void fetchNextPage();
     }
-  }, [lastItemIndex, pagedRows.length, hasMore, loadingRows]);
-
-  const fetchRowsPage = useCallback(async () => {
-    if (!baseId || fetchingNextPageRef.current || !hasMoreRef.current) return;
-
-    fetchingNextPageRef.current = true;
-    setLoadingRows(true);
-
-    try {
-      const rows = await utils.base.getRowsPage.fetch({
-        baseId,
-        offset: pageRef.current * PAGE_SIZE,
-        limit: PAGE_SIZE,
-      });
-      // Ensure each row's data is a Record<string, unknown>
-      const normalizedRows: Row[] = rows.map((row: ApiRow) => ({
-        ...row,
-        data: row.data && typeof row.data === "object" ? row.data : {},
-      })) as Row[];
-
-      // Don't add duplicates - check if rows already exist
-      setPagedRows((prev) => {
-        const existingIds = new Set(prev.map((r) => r.id));
-        const newRows = normalizedRows.filter(
-          (row) => !existingIds.has(row.id)
-        );
-        return [...prev, ...newRows];
-      });
-
-      setHasMore(rows.length === PAGE_SIZE);
-    } finally {
-      setLoadingRows(false);
-      fetchingNextPageRef.current = false;
-    }
-  }, [baseId, utils.base.getRowsPage]);
-
-  const [resetPagingFlag, setResetPagingFlag] = useState(false);
-  // Initial load
-  useEffect(() => {
-    setPagedRows([]);
-    setPage(0);
-    setHasMore(true);
-  }, [baseId, resetPagingFlag]);
-
-  useEffect(() => {
-    void fetchRowsPage();
-    // eslint-disable-next-line
-  }, [page, fetchRowsPage]);
-  // Scroll container ref for virtualizer
-  const tableContainerRef = useRef<HTMLDivElement>(null);
+  }, [
+    virtualItems,
+    allRows.length,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  ]);
 
   // Optimized mutations with proper cache updates
   const addColumn = trpc.base.addColumn.useMutation({
@@ -356,79 +335,186 @@ const AirtableClone = () => {
 
   const addRow = trpc.base.addRow.useMutation({
     onMutate: async ({ data }) => {
-      // Cancel outgoing refetches
-      await utils.base.getTable.cancel({ baseId });
-
-      // Snapshot previous value
-      const previousPagedRows = pagedRows;
-
-      // Optimistically add row to paginated data
+      const queryKey = {
+        baseId,
+        limit: PAGE_SIZE,
+        searchTerm,
+        filters,
+        sortConfig:
+          sortConfig.columnId && sortConfig.direction
+            ? { columnId: sortConfig.columnId, direction: sortConfig.direction }
+            : undefined,
+      };
+      await utils.base.getRowsInfinite.cancel(queryKey);
+      const previousData = utils.base.getRowsInfinite.getInfiniteData(queryKey);
       const tempId = `temp-row-${Date.now()}`;
-      const tempRow: Row = { id: tempId, baseId, data };
-      setPagedRows((prev) => [...prev, tempRow]);
+      const tempRow = {
+        id: tempId,
+        baseId,
+        data: data as Prisma.JsonObject,
+      };
 
-      return { previousPagedRows, tempId };
+      utils.base.getRowsInfinite.setInfiniteData(queryKey, (old) => {
+        if (!old) {
+          return {
+            pages: [{ rows: [tempRow], nextCursor: undefined }],
+            pageParams: [undefined],
+          };
+        }
+        const newFirstPage = {
+          rows: [tempRow, ...(old.pages[0]?.rows ?? [])],
+          nextCursor: old.pages[0]?.nextCursor,
+        };
+        return {
+          ...old,
+          pages: [newFirstPage, ...(old.pages.slice(1) ?? [])],
+        };
+      });
+      return { previousData, tempId };
     },
     onSuccess: (newRow, _, context) => {
-      // Update with real data from server
       if (context) {
-        setPagedRows((prev) =>
-          prev.map((row) =>
-            row.id === context.tempId
-              ? ({
-                  ...newRow,
-                  data:
-                    newRow.data && typeof newRow.data === "object"
-                      ? newRow.data
-                      : {},
-                } as Row)
-              : row
-          )
-        );
+        const queryKey = {
+          baseId,
+          limit: PAGE_SIZE,
+          searchTerm,
+          filters,
+          sortConfig:
+            sortConfig.columnId && sortConfig.direction
+              ? {
+                  columnId: sortConfig.columnId,
+                  direction: sortConfig.direction,
+                }
+              : undefined,
+        };
+        utils.base.getRowsInfinite.setInfiniteData(queryKey, (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              rows: page.rows.map((row) =>
+                row.id === context.tempId
+                  ? {
+                      ...newRow,
+                      data:
+                        newRow.data &&
+                        typeof newRow.data === "object" &&
+                        !Array.isArray(newRow.data)
+                          ? newRow.data
+                          : {},
+                    }
+                  : row
+              ),
+            })),
+          };
+        });
       }
     },
     onError: (_, __, context) => {
-      // Rollback on error
-      if (context?.previousPagedRows) {
-        setPagedRows(context.previousPagedRows);
+      if (context?.previousData) {
+        const queryKey = {
+          baseId,
+          limit: PAGE_SIZE,
+          searchTerm,
+          filters,
+          sortConfig:
+            sortConfig.columnId && sortConfig.direction
+              ? {
+                  columnId: sortConfig.columnId,
+                  direction: sortConfig.direction,
+                }
+              : undefined,
+        };
+        utils.base.getRowsInfinite.setInfiniteData(
+          queryKey,
+          context.previousData
+        );
       }
     },
   });
   const updateRow = trpc.base.updateRow.useMutation({
     onMutate: async ({ rowId, data }) => {
-      // Cancel outgoing refetches
-      await utils.base.getTable.cancel({ baseId });
+      const queryKey = {
+        baseId,
+        limit: PAGE_SIZE,
+        searchTerm,
+        filters,
+        sortConfig:
+          sortConfig.columnId && sortConfig.direction
+            ? { columnId: sortConfig.columnId, direction: sortConfig.direction }
+            : undefined,
+      };
+      await utils.base.getRowsInfinite.cancel(queryKey);
+      const previousData = utils.base.getRowsInfinite.getInfiniteData(queryKey);
 
-      // Snapshot previous value
-      const previousPagedRows = pagedRows;
+      utils.base.getRowsInfinite.setInfiniteData(queryKey, (oldData) => {
+        if (!oldData) return oldData;
+        return {
+          ...oldData,
+          pages: oldData.pages.map((page) => ({
+            ...page,
+            rows: page.rows.map((row) =>
+              row.id === rowId
+                ? { ...row, data: data as Prisma.JsonObject }
+                : row
+            ),
+          })),
+        };
+      });
 
-      // Optimistically update the row in paginated data
-      setPagedRows((prev) =>
-        prev.map((row) => (row.id === rowId ? { ...row, data } : row))
-      );
-
-      return { previousPagedRows };
+      return { previousData };
     },
-    onSuccess: (updatedRow, _variables, context) => {
-      // Update with real data from server
-      setPagedRows((prev) =>
-        prev.map((row) =>
-          row.id === updatedRow.id
-            ? ({
-                ...updatedRow,
-                data:
-                  updatedRow.data && typeof updatedRow.data === "object"
-                    ? updatedRow.data
-                    : {},
-              } as Row)
-            : row
-        )
-      );
+    onSuccess: (updatedRow) => {
+      const queryKey = {
+        baseId,
+        limit: PAGE_SIZE,
+        searchTerm,
+        filters,
+        sortConfig:
+          sortConfig.columnId && sortConfig.direction
+            ? { columnId: sortConfig.columnId, direction: sortConfig.direction }
+            : undefined,
+      };
+      utils.base.getRowsInfinite.setInfiniteData(queryKey, (oldData) => {
+        if (!oldData) return oldData;
+        return {
+          ...oldData,
+          pages: oldData.pages.map((page) => ({
+            ...page,
+            rows: page.rows.map((row) =>
+              row.id === updatedRow.id
+                ? {
+                    ...updatedRow,
+                    data:
+                      updatedRow.data &&
+                      typeof updatedRow.data === "object" &&
+                      !Array.isArray(updatedRow.data)
+                        ? updatedRow.data
+                        : {},
+                  }
+                : row
+            ),
+          })),
+        };
+      });
     },
     onError: (_error, _variables, context) => {
-      // Rollback on error
-      if (context?.previousPagedRows) {
-        setPagedRows(context.previousPagedRows);
+      const queryKey = {
+        baseId,
+        limit: PAGE_SIZE,
+        searchTerm,
+        filters,
+        sortConfig:
+          sortConfig.columnId && sortConfig.direction
+            ? { columnId: sortConfig.columnId, direction: sortConfig.direction }
+            : undefined,
+      };
+      if (context?.previousData) {
+        utils.base.getRowsInfinite.setInfiniteData(
+          queryKey,
+          context.previousData
+        );
       }
     },
   });
@@ -545,10 +631,10 @@ const AirtableClone = () => {
 
     // Set new timeout for backend update
     const timeout = setTimeout(() => {
-      const row = pagedRows.find((r) => r.id === rowId);
+      const row = allRows.find((r) => r.id === rowId);
       if (!row) return;
 
-      const dataObj = row.data ?? {};
+      const dataObj = (row.data ?? {}) as Prisma.JsonObject;
       const newData = { ...dataObj, [colId]: value };
 
       void updateRow.mutateAsync({ rowId, data: newData });
@@ -602,8 +688,7 @@ const AirtableClone = () => {
         if (col > 0) setSelectedCell({ row, col: col - 1 });
         break;
       case "ArrowDown":
-        if (row < processedRows.length - 1)
-          setSelectedCell({ row: row + 1, col });
+        if (row < allRows.length - 1) setSelectedCell({ row: row + 1, col });
         break;
       case "ArrowUp":
         if (row > 0) setSelectedCell({ row: row - 1, col });
@@ -612,13 +697,12 @@ const AirtableClone = () => {
         if (e.shiftKey) {
           if (row > 0) setSelectedCell({ row: row - 1, col });
         } else {
-          if (row < processedRows.length - 1)
-            setSelectedCell({ row: row + 1, col });
+          if (row < allRows.length - 1) setSelectedCell({ row: row + 1, col });
         }
         break;
       default:
         if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-          const rowData = processedRows[row];
+          const rowData = allRows[row];
           const colId = base.columns[col]?.id;
           if (rowData && colId) {
             handleCellValueChange(rowData.id, colId, e.key);
@@ -648,7 +732,7 @@ const AirtableClone = () => {
 
     const { row: currentRow, col: currentCol } = editingCell;
 
-    const row = processedRows[currentRow];
+    const row = allRows[currentRow];
     if (row && !row.id.startsWith("temp-row-")) {
       const col = base.columns[currentCol];
       if (col) {
@@ -678,7 +762,7 @@ const AirtableClone = () => {
     setLocalCellValues({});
 
     if (direction === "down") {
-      if (currentRow < processedRows.length - 1) {
+      if (currentRow < allRows.length - 1) {
         const nextRow = currentRow + 1;
         setSelectedCell({ row: nextRow, col: currentCol });
         setEditingCell({ row: nextRow, col: currentCol });
@@ -735,15 +819,10 @@ const AirtableClone = () => {
       void router.push("/");
     });
   };
-  const addManyRows = trpc.base.addManyRows.useMutation({});
-  useEffect(() => {
-    if (resetPagingFlag) {
-      setPagedRows([]);
-      setPage(0);
-      setHasMore(true);
-      setResetPagingFlag(false);
-    }
-  }, [resetPagingFlag]);
+  const addManyRows = trpc.base.addManyRows.useMutation({
+    // Invalidation will be handled manually after all batches are complete
+  });
+
   const handleAddManyRows = async () => {
     if (!base) return;
 
@@ -753,7 +832,7 @@ const AirtableClone = () => {
       base.columns.map((col) => [col.id, ""])
     );
     const totalRows = 10000;
-    const BATCH_SIZE = 500;
+    const BATCH_SIZE = 1250;
 
     const batches = [];
     for (let i = 0; i < totalRows; i += BATCH_SIZE) {
@@ -764,7 +843,7 @@ const AirtableClone = () => {
       batches.push(batch);
     }
 
-    const CONCURRENT_BATCHES = 3;
+    const CONCURRENT_BATCHES = 4;
     for (let i = 0; i < batches.length; i += CONCURRENT_BATCHES) {
       const currentBatches = batches.slice(i, i + CONCURRENT_BATCHES);
 
@@ -775,15 +854,15 @@ const AirtableClone = () => {
       );
     }
 
-    await utils.base.getTable.invalidate({ baseId });
-    setResetPagingFlag(true);
+    // Invalidate the infinite query to refetch all rows
+    await utils.base.getRowsInfinite.invalidate({ baseId });
     setIsBulkAdding(false);
   };
   // Single computed variable that handles all filtering, sorting, and searching
   const processedRows = useMemo(() => {
-    if (!pagedRows.length) return [];
+    if (!allRows.length) return [];
 
-    let rows = pagedRows;
+    let rows = allRows;
 
     // Apply search filter
     if (searchTerm) {
@@ -860,7 +939,7 @@ const AirtableClone = () => {
     }
 
     return rows;
-  }, [pagedRows, searchTerm, filters, sortConfig, base?.columns]);
+  }, [allRows, searchTerm, filters, sortConfig, base?.columns]);
 
   if (session === undefined) {
     // Session is loading
@@ -1539,10 +1618,9 @@ const AirtableClone = () => {
       </div>
       {/* Bottom Status Bar */}
       <div className="flex h-8 items-center border-t border-gray-200 bg-white px-4">
-        {" "}
         <span className="text-xs text-gray-500">
-          {processedRows.length} of {pagedRows.length} records shown
-          {hasMore ? " (loading more...)" : ""}
+          {allRows.length} records
+          {isFetchingNextPage ? " (loading more...)" : ""}
         </span>
       </div>
       {showAddColumnPopup && (
