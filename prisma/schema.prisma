@@ -51,11 +51,17 @@ model Base {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+enum ColumnType {
+  TEXT
+  NUMBER
+}
+
 model Column {
   id      String @id @default(cuid())
   baseId  String
   name    String
   order   Int
+  type ColumnType @default(TEXT)
   base    Base   @relation(fields: [baseId], references: [id])
 }
 

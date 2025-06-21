@@ -24,6 +24,7 @@ import {
   SortAsc,
   Trash2,
 } from "lucide-react";
+import { Bars3BottomLeftIcon, HashtagIcon } from "@heroicons/react/24/outline";
 import Image from "next/image";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
@@ -195,6 +196,9 @@ const AirtableClone = () => {
   const [loadingRows, setLoadingRows] = useState(false);
   const [isBulkAdding, setIsBulkAdding] = useState(false);
   const fetchingNextPageRef = useRef(false);
+  const [showAddColumnPopup, setShowAddColumnPopup] = useState(false);
+  const addColumnButtonRef = useRef<HTMLButtonElement>(null);
+  const addColumnPopupRef = useRef<HTMLDivElement>(null);
 
   // Add refs for page and hasMore to use in useCallback without adding them as dependencies.
   const pageRef = useRef(page);
@@ -288,7 +292,10 @@ const AirtableClone = () => {
         old
           ? {
               ...old,
-              columns: [...old.columns, { id: tempId, baseId, name, order }],
+              columns: [
+                ...old.columns,
+                { id: tempId, baseId, name, order, type: "TEXT" },
+              ],
             }
           : old
       );
@@ -477,6 +484,15 @@ const AirtableClone = () => {
       ) {
         setShowNumberFilter(false);
       }
+
+      if (
+        addColumnPopupRef.current &&
+        !addColumnPopupRef.current.contains(event.target as Node) &&
+        addColumnButtonRef.current &&
+        !addColumnButtonRef.current.contains(event.target as Node)
+      ) {
+        setShowAddColumnPopup(false);
+      }
     };
 
     document.addEventListener("mousedown", handleClickOutside);
@@ -485,13 +501,15 @@ const AirtableClone = () => {
     };
   }, [showSort, showTextFilter, showNumberFilter]);
 
-  const handleAddColumn = () => {
+  const handleAddColumn = (type: "TEXT" | "NUMBER") => {
     if (!base) return;
     void addColumn.mutateAsync({
       baseId,
       name: `Column ${base.columns.length + 1}`,
       order: base.columns.length,
+      type: type,
     });
+    setShowAddColumnPopup(false);
   };
 
   const handleAddRow = () => {
@@ -1302,10 +1320,11 @@ const AirtableClone = () => {
                           <ChevronDown className="h-3 w-3 text-gray-400" />
                         </div>
                       </th>
-                    ))}
-                    <th className="h-10 w-8 border-b border-gray-200 bg-gray-50 text-center">
+                    ))}{" "}
+                    <th className="relative h-10 w-8 border-b border-gray-200 bg-gray-50 text-center">
                       <button
-                        onClick={handleAddColumn}
+                        ref={addColumnButtonRef}
+                        onClick={() => setShowAddColumnPopup((p) => !p)}
                         disabled={addColumn.isLoading}
                         className="mx-auto flex h-6 w-6 items-center justify-center rounded text-blue-500 hover:bg-blue-50 disabled:opacity-50"
                         title="Add column"
@@ -1313,6 +1332,30 @@ const AirtableClone = () => {
                       >
                         <Plus className="h-4 w-4" />
                       </button>
+                      {/* Add Column Popup */}
+                      {showAddColumnPopup && (
+                        <div
+                          ref={addColumnPopupRef}
+                          className="absolute right-0 top-full z-20 mt-1 w-60 rounded-md border border-gray-200 bg-white shadow-lg"
+                        >
+                          <ul className="py-1">
+                            <li
+                              onClick={() => handleAddColumn("TEXT")}
+                              className="flex cursor-pointer items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                            >
+                              <Bars3BottomLeftIcon className="h-5 w-5 text-gray-500" />
+                              <span>Text</span>
+                            </li>
+                            <li
+                              onClick={() => handleAddColumn("NUMBER")}
+                              className="flex cursor-pointer items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                            >
+                              <HashtagIcon className="h-5 w-5 text-gray-500" />
+                              <span>Number</span>
+                            </li>
+                          </ul>
+                        </div>
+                      )}
                     </th>
                   </tr>{" "}
                 </thead>
@@ -1436,11 +1479,6 @@ const AirtableClone = () => {
           {processedRows.length} of {pagedRows.length} records shown
           {hasMore ? " (loading more...)" : ""}
         </span>
-        <div className="ml-auto">
-          <button className="rounded bg-gray-800 px-2 py-1 text-xs text-white">
-            Getting started
-          </button>
-        </div>
       </div>
     </div>
   );

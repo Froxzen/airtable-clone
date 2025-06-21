@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { faker } from "@faker-js/faker";
+import { ColumnType } from "@prisma/client";
 
 const tableRowSchema = z.record(z.string());
 
@@ -88,7 +89,7 @@ export const baseRouter = createTRPCRouter({
 
   addColumn: protectedProcedure
     .input(
-      z.object({ baseId: z.string(), name: z.string(), order: z.number() })
+      z.object({ baseId: z.string(), name: z.string(), order: z.number(), type: z.nativeEnum(ColumnType) })
     )
     .mutation(async ({ ctx, input }) => {
       return ctx.prisma.column.create({
@@ -96,6 +97,7 @@ export const baseRouter = createTRPCRouter({
           baseId: input.baseId,
           name: input.name,
           order: input.order,
+          type: input.type
         },
       });
     }),
