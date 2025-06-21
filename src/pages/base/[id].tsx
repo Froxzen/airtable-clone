@@ -217,7 +217,7 @@ const AirtableClone = () => {
           ...row,
           data:
             row.data && typeof row.data === "object" && !Array.isArray(row.data)
-              ? (row.data as Prisma.JsonObject)
+              ? (row.data)
               : {},
         }))
       ) ?? [],
@@ -634,7 +634,7 @@ const AirtableClone = () => {
       const row = allRows.find((r) => r.id === rowId);
       if (!row) return;
 
-      const dataObj = (row.data ?? {}) as Prisma.JsonObject;
+      const dataObj = (row.data ?? {});
       const newData = { ...dataObj, [colId]: value };
 
       void updateRow.mutateAsync({ rowId, data: newData });
