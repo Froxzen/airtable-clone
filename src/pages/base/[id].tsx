@@ -602,13 +602,29 @@ const AirtableClone = () => {
         if (col > 0) setSelectedCell({ row, col: col - 1 });
         break;
       case "ArrowDown":
-        if (row < pagedRows.length - 1) setSelectedCell({ row: row + 1, col });
+        if (row < processedRows.length - 1)
+          setSelectedCell({ row: row + 1, col });
         break;
       case "ArrowUp":
         if (row > 0) setSelectedCell({ row: row - 1, col });
         break;
       case "Enter":
-        setEditingCell({ row, col });
+        if (e.shiftKey) {
+          if (row > 0) setSelectedCell({ row: row - 1, col });
+        } else {
+          if (row < processedRows.length - 1)
+            setSelectedCell({ row: row + 1, col });
+        }
+        break;
+      default:
+        if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          const rowData = processedRows[row];
+          const colId = base.columns[col]?.id;
+          if (rowData && colId) {
+            handleCellValueChange(rowData.id, colId, e.key);
+            setEditingCell({ row, col });
+          }
+        }
         break;
     }
   };
@@ -625,13 +641,17 @@ const AirtableClone = () => {
       }
     }
     handleCellValueChange(rowId, colId, value);
-  }; // Handle ending edit mode
-  const handleEditEnd = () => {
-    if (editingCell) {
-      const row = pagedRows[editingCell.row];
-      if (row && row.id.startsWith("temp-row-")) return;
-      const col = base?.columns[editingCell.col];
-      if (row && col) {
+  };
+
+  const handleEditEndAndNavigate = (direction: "up" | "down" | "none") => {
+    if (!editingCell || !base) return;
+
+    const { row: currentRow, col: currentCol } = editingCell;
+
+    const row = processedRows[currentRow];
+    if (row && !row.id.startsWith("temp-row-")) {
+      const col = base.columns[currentCol];
+      if (col) {
         const key = `${row.id}-${col.id}`;
 
         const existingTimeout = cellUpdateTimeouts.current.get(key);
@@ -645,8 +665,6 @@ const AirtableClone = () => {
           const dataObj = row.data ?? {};
 
           if (col.type === "NUMBER") {
-            // On blur, if the content is not a valid number (e.g. just '-', '1.2.3', 'abc'),
-            // clear the cell content.
             if (value !== "" && isNaN(Number(value))) {
               value = "";
             }
@@ -658,7 +676,31 @@ const AirtableClone = () => {
       }
     }
     setLocalCellValues({});
-    setEditingCell(null);
+
+    if (direction === "down") {
+      if (currentRow < processedRows.length - 1) {
+        const nextRow = currentRow + 1;
+        setSelectedCell({ row: nextRow, col: currentCol });
+        setEditingCell({ row: nextRow, col: currentCol });
+      } else {
+        setEditingCell(null);
+      }
+    } else if (direction === "up") {
+      if (currentRow > 0) {
+        const nextRow = currentRow - 1;
+        setSelectedCell({ row: nextRow, col: currentCol });
+        setEditingCell({ row: nextRow, col: currentCol });
+      } else {
+        setEditingCell(null);
+      }
+    } else {
+      setEditingCell(null);
+    }
+  };
+
+  // Handle ending edit mode
+  const handleEditEnd = () => {
+    handleEditEndAndNavigate("none");
   };
 
   // Handle column editing
@@ -1393,7 +1435,7 @@ const AirtableClone = () => {
                             position: "absolute",
                             top: 0,
                             left: 0,
-                            width: "100%",
+                            width: "max-content",
                             height: `${virtualRow.size}px`,
                             transform: `translateY(${virtualRow.start}px)`,
                           }}
@@ -1462,7 +1504,10 @@ const AirtableClone = () => {
                   </tbody>
                   <tfoot>
                     {/* Row Placeholder */}
-                    <tr className="flex hover:bg-gray-100">
+                    <tr
+                      className="flex hover:bg-gray-100"
+                      style={{ width: "max-content" }}
+                    >
                       <td className="flex h-10 w-12 flex-shrink-0 items-center justify-center border-b border-l border-gray-200">
                         <button
                           onClick={handleAddRow}
