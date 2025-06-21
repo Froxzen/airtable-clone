@@ -153,14 +153,138 @@ export const baseRouter = createTRPCRouter({
         baseId: z.string(),
         offset: z.number(),
         limit: z.number(),
+        searchTerm: z.string().optional(),
+        filters: z
+          .record(
+            z.string(),
+            z.object({ type: z.string(), value: z.string() })
+          )
+          .optional(),
+        sortConfig: z
+          .object({ columnId: z.string(), direction: z.enum(["asc", "desc"]) })
+          .optional(),
       })
     )
     .query(async ({ ctx, input }) => {
-      const rows = await ctx.prisma.row.findMany({
+      const { baseId, offset, limit, searchTerm, filters, sortConfig } = input;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const where: any = { baseId };
+      const whereConditions = [];
+
+      const columns = await ctx.prisma.column.findMany({
         where: { baseId: input.baseId },
-        orderBy: { id: "asc" },
-        skip: input.offset,
-        take: input.limit,
+        select: { id: true, type: true },
+      });
+      const columnMap = new Map(columns.map((c) => [c.id, c]));
+
+      // Handle search term
+      if (searchTerm) {
+        const searchConditions = columns
+          .filter((col) => col.type === "TEXT") // Only search text columns
+          .map((col) => ({
+            data: {
+              path: [col.id],
+              string_contains: searchTerm,
+              mode: "insensitive",
+            },
+          }));
+
+        if (searchConditions.length > 0) {
+          whereConditions.push({ OR: searchConditions });
+        }
+      }
+
+      // Handle filters
+      if (filters) {
+        for (const [colId, filter] of Object.entries(filters)) {
+          const column = columnMap.get(colId);
+          if (!column) continue;
+
+          const { type, value } = filter;
+          const isNumeric = column.type === "NUMBER";
+          const filterValue = isNumeric ? Number(value) : value;
+
+          if (isNumeric && (value === "" || isNaN(filterValue as number)))
+            continue;
+
+          let condition;
+          switch (type) {
+            case "contains":
+              condition = {
+                path: [colId],
+                string_contains: value,
+                mode: "insensitive",
+              };
+              break;
+            case "notContains":
+              condition = {
+                NOT: {
+                  path: [colId],
+                  string_contains: value,
+                  mode: "insensitive",
+                },
+              };
+              break;
+            case "equal":
+              condition = { path: [colId], equals: filterValue };
+              break;
+            case "notEqual":
+              condition = { NOT: { path: [colId], equals: filterValue } };
+              break;
+            case "gt":
+              if (!isNumeric) continue;
+              condition = { path: [colId], gt: filterValue };
+              break;
+            case "lt":
+              if (!isNumeric) continue;
+              condition = { path: [colId], lt: filterValue };
+              break;
+            case "empty":
+              condition = {
+                OR: [
+                  { path: [colId], equals: null },
+                  { path: [colId], equals: "" },
+                ],
+              };
+              break;
+            case "notEmpty":
+              condition = {
+                AND: [
+                  { NOT: { path: [colId], equals: null } },
+                  { NOT: { path: [colId], equals: "" } },
+                ],
+              };
+              break;
+          }
+          if (condition) {
+            whereConditions.push({ data: condition });
+          }
+        }
+      }
+
+      if (whereConditions.length > 0) {
+        where.AND = whereConditions;
+      }
+
+      // Handle sorting
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let orderBy: any = { id: "asc" };
+      if (sortConfig?.columnId && sortConfig?.direction) {
+        orderBy = {
+          data: {
+            path: [sortConfig.columnId],
+            sort: sortConfig.direction,
+            nulls: "last",
+          },
+        };
+      }
+
+      const rows = await ctx.prisma.row.findMany({
+        where,
+        orderBy,
+        skip: offset,
+        take: limit,
       });
       return rows;
     }),

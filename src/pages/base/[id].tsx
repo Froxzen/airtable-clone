@@ -66,6 +66,7 @@ const AirtableClone = () => {
     col: number;
   } | null>(null);
   const [editingColumn, setEditingColumn] = useState<string | null>(null);
+  const [newColumnName, setNewColumnName] = useState("");
 
   const { data: session } = useSession();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -504,20 +505,19 @@ const AirtableClone = () => {
   const handleAddColumn = (type: "TEXT" | "NUMBER") => {
     if (!base) return;
 
-    // Count existing columns of this type to generate proper numbering
-    const existingColumnsOfType = base.columns.filter(
-      (col) => col.type === type
-    ).length;
-    const typeName = type === "TEXT" ? "Text" : "Number";
-    const columnName = `${typeName} ${existingColumnsOfType + 1}`;
+    const name = newColumnName.trim();
+    if (!name) {
+      return;
+    }
 
     void addColumn.mutateAsync({
       baseId,
-      name: columnName,
+      name,
       order: base.columns.length,
       type: type,
     });
     setShowAddColumnPopup(false);
+    setNewColumnName("");
   };
 
   const handleAddRow = () => {
@@ -615,6 +615,15 @@ const AirtableClone = () => {
 
   // Handle input change for editing cells
   const handleInputChange = (rowId: string, colId: string, value: string) => {
+    const column = base?.columns.find((c) => c.id === colId);
+
+    if (column?.type === "NUMBER") {
+      // Allow empty string, a single minus sign, and valid numeric patterns (int/float).
+      if (value !== "" && !/^-?\d*\.?\d*$/.test(value)) {
+        // Prevents typing invalid characters into number cells.
+        return;
+      }
+    }
     handleCellValueChange(rowId, colId, value);
   }; // Handle ending edit mode
   const handleEditEnd = () => {
@@ -632,8 +641,17 @@ const AirtableClone = () => {
         }
 
         if (localCellValues[key] !== undefined) {
-          const value = localCellValues[key];
+          let value = localCellValues[key];
           const dataObj = row.data ?? {};
+
+          if (col.type === "NUMBER") {
+            // On blur, if the content is not a valid number (e.g. just '-', '1.2.3', 'abc'),
+            // clear the cell content.
+            if (value !== "" && isNaN(Number(value))) {
+              value = "";
+            }
+          }
+
           const newData = { ...dataObj, [col.id]: value };
           void updateRow.mutateAsync({ rowId: row.id, data: newData });
         }
@@ -1270,213 +1288,189 @@ const AirtableClone = () => {
         </div>
         {/* Main Content: Table Grid */}
         <div className="flex flex-1 flex-col">
-          {" "}
           {/* Scrollable Table Container */}
           <div
             ref={tableContainerRef}
             className="flex-1 overflow-auto"
-            style={{ maxHeight: "calc(100vh - 175px)" }}
+            style={{
+              maxHeight: "calc(100vh - 200px)",
+            }}
           >
             <div
               ref={wrapperRef}
-              className="outline-none"
+              className="overflow-x-auto focus:outline-none"
               tabIndex={0}
               onKeyDown={editingCell ? undefined : handleKeyDown}
             >
-              {" "}
-              <table className="border-collapse">
-                {/* Table Header */}
-                <thead>
-                  {" "}
-                  <tr className="flex">
-                    <th className="flex h-10 w-12 flex-shrink-0 items-center justify-center border-b border-r border-gray-200 bg-gray-50 text-center text-xs font-medium text-gray-500">
-                      #
-                    </th>{" "}
-                    {base?.columns?.map((col) => (
-                      <th
-                        key={col.id}
-                        className="relative h-10 w-48 flex-shrink-0 border-b border-r border-gray-200 bg-gray-50 px-3 text-left text-xs font-medium text-gray-700"
-                      >
-                        <div className="flex h-full items-center space-x-1">
-                          {editingColumn === col.id ? (
-                            <input
-                              autoFocus
-                              className="flex-1 rounded border border-blue-500 bg-white px-2 py-1 text-xs"
-                              defaultValue={col.name}
-                              onBlur={(e) =>
-                                handleColumnNameChange(col.id, e.target.value)
-                              }
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  handleColumnNameChange(
-                                    col.id,
-                                    e.currentTarget.value
-                                  );
-                                } else if (e.key === "Escape") {
-                                  setEditingColumn(null);
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-max table-auto">
+                  {/* Table Header */}
+                  <thead>
+                    {" "}
+                    <tr className="flex">
+                      <th className="flex h-10 w-12 flex-shrink-0 items-center justify-center border-b border-r border-gray-200 bg-gray-50 text-center text-xs font-medium text-gray-500">
+                        #
+                      </th>{" "}
+                      {base?.columns?.map((col) => (
+                        <th
+                          key={col.id}
+                          className="relative h-10 w-48 flex-shrink-0 border-b border-r border-gray-200 bg-gray-50 px-3 text-left text-xs font-medium text-gray-700"
+                        >
+                          <div className="flex h-full items-center space-x-1">
+                            {editingColumn === col.id ? (
+                              <input
+                                autoFocus
+                                className="flex-1 rounded border border-blue-500 bg-white px-2 py-1 text-xs"
+                                defaultValue={col.name}
+                                onBlur={(e) =>
+                                  handleColumnNameChange(col.id, e.target.value)
                                 }
-                              }}
-                            />
-                          ) : (
-                            <span
-                              className="cursor-pointer rounded px-1 py-0.5 hover:bg-gray-100"
-                              onClick={() => handleColumnClick(col.id)}
-                            >
-                              {col.name}
-                            </span>
-                          )}
-                          <ChevronDown className="h-3 w-3 text-gray-400" />
-                        </div>
-                      </th>
-                    ))}{" "}
-                    <th className="relative h-10 w-8 flex-shrink-0 border-b border-gray-200 bg-gray-50">
-                      <div className="flex h-full items-center justify-center">
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    handleColumnNameChange(
+                                      col.id,
+                                      e.currentTarget.value
+                                    );
+                                  } else if (e.key === "Escape") {
+                                    setEditingColumn(null);
+                                  }
+                                }}
+                              />
+                            ) : (
+                              <span
+                                className="cursor-pointer rounded px-1 py-0.5 hover:bg-gray-100"
+                                onClick={() => handleColumnClick(col.id)}
+                              >
+                                {col.name}
+                              </span>
+                            )}
+                            <ChevronDown className="h-3 w-3 text-gray-400" />
+                          </div>
+                        </th>
+                      ))}{" "}
+                      <th className="sticky right-0 z-10 w-12 flex-shrink-0 border-b border-l border-r border-gray-200 bg-gray-50 p-0">
                         <button
                           ref={addColumnButtonRef}
-                          onClick={() => setShowAddColumnPopup((p) => !p)}
-                          disabled={addColumn.isLoading}
-                          className="flex h-6 w-6 items-center justify-center rounded text-blue-500 hover:bg-blue-50 disabled:opacity-50"
-                          title="Add column"
+                          onClick={() => {
+                            setNewColumnName("");
+                            setShowAddColumnPopup((v) => !v);
+                          }}
+                          className="flex h-full w-full items-center justify-center rounded-none p-0 text-gray-500 hover:bg-gray-200"
+                        >
+                          <Plus className="h-5 w-5" />
+                        </button>
+                      </th>
+                    </tr>
+                  </thead>
+                  {/* Table Body */}
+                  <tbody
+                    style={{
+                      height: `${rowVirtualizer.getTotalSize()}px`,
+                      position: "relative",
+                    }}
+                  >
+                    {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                      const rowIdx = virtualRow.index;
+                      const row = processedRows[rowIdx];
+
+                      if (!row) return null;
+
+                      return (
+                        <tr
+                          key={row.id}
+                          className="flex hover:bg-gray-50"
+                          style={{
+                            position: "absolute",
+                            top: 0,
+                            left: 0,
+                            width: "100%",
+                            height: `${virtualRow.size}px`,
+                            transform: `translateY(${virtualRow.start}px)`,
+                          }}
+                        >
+                          {" "}
+                          <td className="flex h-10 w-12 flex-shrink-0 items-center justify-center border-b border-r border-gray-200 bg-gray-50 text-center text-xs text-gray-500">
+                            {rowIdx + 1}
+                          </td>
+                          {base?.columns.map((col, colIdx) => {
+                            const isSelected =
+                              selectedCell?.row === rowIdx &&
+                              selectedCell?.col === colIdx;
+                            const isEditing =
+                              editingCell?.row === rowIdx &&
+                              editingCell?.col === colIdx;
+                            const value = getCellValue(row, col.id);
+                            const isTempRow = row.id.startsWith("temp-row-");
+                            return (
+                              <td
+                                key={col.id}
+                                className={`relative flex h-10 w-48 flex-shrink-0 cursor-pointer items-center border-b border-r border-gray-200 px-3 ${
+                                  isSelected || isEditing
+                                    ? "bg-white shadow-[inset_0_0_0_3px_#3b82f6]"
+                                    : ""
+                                }`}
+                                onClick={() => handleCellClick(rowIdx, colIdx)}
+                                onDoubleClick={() =>
+                                  handleCellDoubleClick(rowIdx, colIdx)
+                                }
+                              >
+                                {isEditing ? (
+                                  <input
+                                    disabled={isTempRow}
+                                    className="absolute inset-0 h-full w-full border-none bg-white px-3 py-0 text-sm outline-none"
+                                    autoFocus
+                                    value={value}
+                                    onChange={(e) =>
+                                      handleInputChange(
+                                        row.id,
+                                        col.id,
+                                        e.target.value
+                                      )
+                                    }
+                                    onBlur={handleEditEnd}
+                                    onKeyDown={(e) => {
+                                      if (
+                                        e.key === "Enter" ||
+                                        e.key === "Escape"
+                                      ) {
+                                        e.preventDefault();
+                                        handleEditEnd();
+                                      }
+                                    }}
+                                  />
+                                ) : (
+                                  <div className="truncate text-sm text-gray-700">
+                                    {value}
+                                  </div>
+                                )}{" "}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td
+                        colSpan={(base?.columns?.length ?? 0) + 1}
+                        className="h-10 text-center"
+                      >
+                        <button
+                          onClick={handleAddRow}
+                          disabled={addRow.isLoading}
+                          className="mx-auto flex h-6 w-6 items-center justify-center rounded text-blue-500 hover:bg-blue-50 disabled:opacity-50"
+                          title="Add row"
                           type="button"
                         >
                           <Plus className="h-4 w-4" />
                         </button>
-                      </div>
-                      {/* Add Column Popup */}
-                      {showAddColumnPopup && (
-                        <div
-                          ref={addColumnPopupRef}
-                          className="absolute right-0 top-full z-20 mt-1 w-60 rounded-md border border-gray-200 bg-white shadow-lg"
-                        >
-                          <ul className="py-1">
-                            <li
-                              onClick={() => handleAddColumn("TEXT")}
-                              className="flex cursor-pointer items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                            >
-                              <Bars3BottomLeftIcon className="h-5 w-5 text-gray-500" />
-                              <span>Text</span>
-                            </li>
-                            <li
-                              onClick={() => handleAddColumn("NUMBER")}
-                              className="flex cursor-pointer items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                            >
-                              <HashtagIcon className="h-5 w-5 text-gray-500" />
-                              <span>Number</span>
-                            </li>
-                          </ul>
-                        </div>
-                      )}
-                    </th>
-                  </tr>{" "}
-                </thead>
-                {/* Table Body */}
-                <tbody
-                  style={{
-                    height: `${rowVirtualizer.getTotalSize()}px`,
-                    position: "relative",
-                  }}
-                >
-                  {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                    const rowIdx = virtualRow.index;
-                    const row = processedRows[rowIdx];
-
-                    if (!row) return null;
-
-                    return (
-                      <tr
-                        key={row.id}
-                        className="flex hover:bg-gray-50"
-                        style={{
-                          position: "absolute",
-                          top: 0,
-                          left: 0,
-                          width: "100%",
-                          height: `${virtualRow.size}px`,
-                          transform: `translateY(${virtualRow.start}px)`,
-                        }}
-                      >
-                        {" "}
-                        <td className="flex h-10 w-12 flex-shrink-0 items-center justify-center border-b border-r border-gray-200 bg-gray-50 text-center text-xs text-gray-500">
-                          {rowIdx + 1}
-                        </td>
-                        {base?.columns.map((col, colIdx) => {
-                          const isSelected =
-                            selectedCell?.row === rowIdx &&
-                            selectedCell?.col === colIdx;
-                          const isEditing =
-                            editingCell?.row === rowIdx &&
-                            editingCell?.col === colIdx;
-                          const value = getCellValue(row, col.id);
-                          const isTempRow = row.id.startsWith("temp-row-");
-                          return (
-                            <td
-                              key={col.id}
-                              className={`relative flex h-10 w-48 flex-shrink-0 cursor-pointer items-center border-b border-r border-gray-200 px-3 ${
-                                isSelected || isEditing
-                                  ? "bg-white shadow-[inset_0_0_0_3px_#3b82f6]"
-                                  : ""
-                              }`}
-                              onClick={() => handleCellClick(rowIdx, colIdx)}
-                              onDoubleClick={() =>
-                                handleCellDoubleClick(rowIdx, colIdx)
-                              }
-                            >
-                              {isEditing ? (
-                                <input
-                                  disabled={isTempRow}
-                                  className="absolute inset-0 h-full w-full border-none bg-white px-3 py-0 text-sm outline-none"
-                                  autoFocus
-                                  value={value}
-                                  onChange={(e) =>
-                                    handleInputChange(
-                                      row.id,
-                                      col.id,
-                                      e.target.value
-                                    )
-                                  }
-                                  onBlur={handleEditEnd}
-                                  onKeyDown={(e) => {
-                                    if (
-                                      e.key === "Enter" ||
-                                      e.key === "Escape"
-                                    ) {
-                                      e.preventDefault();
-                                      handleEditEnd();
-                                    }
-                                  }}
-                                />
-                              ) : (
-                                <div className="truncate text-sm text-gray-700">
-                                  {value}
-                                </div>
-                              )}{" "}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <td
-                      colSpan={(base?.columns?.length ?? 0) + 1}
-                      className="h-10 text-center"
-                    >
-                      <button
-                        onClick={handleAddRow}
-                        disabled={addRow.isLoading}
-                        className="mx-auto flex h-6 w-6 items-center justify-center rounded text-blue-500 hover:bg-blue-50 disabled:opacity-50"
-                        title="Add row"
-                        type="button"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </button>
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>{" "}
           </div>
         </div>
       </div>
@@ -1488,6 +1482,59 @@ const AirtableClone = () => {
           {hasMore ? " (loading more...)" : ""}
         </span>
       </div>
+      {showAddColumnPopup && (
+        <div
+          ref={addColumnPopupRef}
+          className="absolute z-20 w-56 rounded-md border border-gray-200 bg-white p-2 shadow-lg"
+          style={{
+            top: addColumnButtonRef.current
+              ? addColumnButtonRef.current.getBoundingClientRect().bottom +
+                window.scrollY
+              : 0,
+            left: addColumnButtonRef.current
+              ? addColumnButtonRef.current.getBoundingClientRect().right +
+                window.scrollX
+              : 0,
+            transform: "translateX(-100%)",
+          }}
+        >
+          <input
+            type="text"
+            value={newColumnName}
+            onChange={(e) => setNewColumnName(e.target.value)}
+            placeholder="Column name"
+            className="my-2 w-full rounded border border-gray-300 px-2 py-1.5 text-sm text-gray-800 placeholder-gray-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && newColumnName.trim()) {
+                e.preventDefault();
+                handleAddColumn("TEXT");
+              }
+            }}
+          />
+          <div className="border-t border-gray-200 pt-2">
+            <div className="mb-1 px-1 text-xs font-semibold text-gray-500">
+              SELECT A FIELD TYPE
+            </div>
+            <button
+              onClick={() => handleAddColumn("TEXT")}
+              className="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!newColumnName.trim()}
+            >
+              <Bars3BottomLeftIcon className="h-4 w-4" />
+              Text
+            </button>
+            <button
+              onClick={() => handleAddColumn("NUMBER")}
+              className="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!newColumnName.trim()}
+            >
+              <HashtagIcon className="h-4 w-4" />
+              Number
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
