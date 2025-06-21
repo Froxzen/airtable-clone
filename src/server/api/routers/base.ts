@@ -283,6 +283,7 @@ export const baseRouter = createTRPCRouter({
 
       const rows = await ctx.prisma.row.findMany({
         where,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         orderBy,
         skip: offset,
         take: limit,
