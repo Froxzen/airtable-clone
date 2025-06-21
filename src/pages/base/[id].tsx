@@ -34,6 +34,7 @@ interface Column {
   baseId: string;
   name: string;
   order: number;
+  type: "TEXT" | "NUMBER";
 }
 
 interface Row {
@@ -500,12 +501,19 @@ const AirtableClone = () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [showSort, showTextFilter, showNumberFilter]);
-
   const handleAddColumn = (type: "TEXT" | "NUMBER") => {
     if (!base) return;
+
+    // Count existing columns of this type to generate proper numbering
+    const existingColumnsOfType = base.columns.filter(
+      (col) => col.type === type
+    ).length;
+    const typeName = type === "TEXT" ? "Text" : "Number";
+    const columnName = `${typeName} ${existingColumnsOfType + 1}`;
+
     void addColumn.mutateAsync({
       baseId,
-      name: `Column ${base.columns.length + 1}`,
+      name: columnName,
       order: base.columns.length,
       type: type,
     });
@@ -1260,8 +1268,8 @@ const AirtableClone = () => {
                 <Plus className="h-3 w-3" />
               </div>
             </div>
-          </div>{" "}
-        </div>{" "}
+          </div>
+        </div>
         {/* Main Content: Table Grid */}
         <div className="flex flex-1 flex-col">
           {" "}
