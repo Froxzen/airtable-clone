@@ -872,7 +872,6 @@ const AirtableClone = () => {
           )}{" "}
         </div>{" "}
       </div>
-
       {/* Secondary Header / Actions */}
       <div
         className={`flex h-12 items-center px-4 text-sm text-white ${
@@ -894,7 +893,6 @@ const AirtableClone = () => {
           </div>{" "}
         </div>{" "}
       </div>
-
       {/* Controls Bar: Sort, Filter, Search */}
       <div className="flex items-center gap-4 border-b border-gray-200 bg-purple-50 px-4 py-3">
         <div className="relative inline-block">
@@ -1190,10 +1188,10 @@ const AirtableClone = () => {
             <Search className="h-4 w-4" />
           </span>
         </div>{" "}
-      </div>
+      </div>{" "}
       <div className="flex flex-1">
         {/* Left Sidebar: Views & Create */}
-        <div className="w-64 border-r border-gray-200 bg-gray-50 p-3">
+        <div className="w-64 flex-shrink-0 border-r border-gray-200 bg-gray-50 p-3">
           {" "}
           {/* Views Section */}
           <div className="mb-16">
@@ -1451,11 +1449,10 @@ const AirtableClone = () => {
                                 <div className="truncate text-sm text-gray-700">
                                   {value}
                                 </div>
-                              )}
+                              )}{" "}
                             </td>
                           );
                         })}
-                        <td className="h-10 w-8 flex-shrink-0 border-b border-r border-gray-200"></td>
                       </tr>
                     );
                   })}
@@ -1463,7 +1460,7 @@ const AirtableClone = () => {
                 <tfoot>
                   <tr>
                     <td
-                      colSpan={(base?.columns?.length ?? 0) + 2}
+                      colSpan={(base?.columns?.length ?? 0) + 1}
                       className="h-10 text-center"
                     >
                       <button
@@ -1483,7 +1480,6 @@ const AirtableClone = () => {
           </div>
         </div>
       </div>
-
       {/* Bottom Status Bar */}
       <div className="flex h-8 items-center border-t border-gray-200 bg-white px-4">
         {" "}
