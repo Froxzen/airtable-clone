@@ -326,7 +326,7 @@ const AirtableClone = () => {
 
   const updateColumn = trpc.base.updateColumn.useMutation({
     onMutate: async ({ columnId, name }) => {
-      // Cancel outgoing refetches
+      // Cancel outgoing refetchs
       await utils.base.getTable.cancel({ baseId });
 
       // Snapshot previous value
@@ -1316,39 +1316,49 @@ const AirtableClone = () => {
                           key={col.id}
                           className="relative h-10 w-48 flex-shrink-0 border-b border-r border-gray-200 bg-gray-50 px-3 text-left text-xs font-medium text-gray-700"
                         >
-                          <div className="flex h-full items-center space-x-1">
-                            {editingColumn === col.id ? (
-                              <input
-                                autoFocus
-                                className="flex-1 rounded border border-blue-500 bg-white px-2 py-1 text-xs"
-                                defaultValue={col.name}
-                                onBlur={(e) =>
-                                  handleColumnNameChange(col.id, e.target.value)
-                                }
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") {
+                          <div className="flex h-full items-center space-x-2">
+                            {col.type === "TEXT" ? (
+                              <Bars3BottomLeftIcon className="h-4 w-4 flex-shrink-0 text-gray-500" />
+                            ) : (
+                              <HashtagIcon className="h-4 w-4 flex-shrink-0 text-gray-500" />
+                            )}
+                            <div className="flex flex-1 items-center">
+                              {editingColumn === col.id ? (
+                                <input
+                                  autoFocus
+                                  className="w-full rounded border border-blue-500 bg-white px-2 py-1 text-xs"
+                                  defaultValue={col.name}
+                                  onBlur={(e) =>
                                     handleColumnNameChange(
                                       col.id,
-                                      e.currentTarget.value
-                                    );
-                                  } else if (e.key === "Escape") {
-                                    setEditingColumn(null);
+                                      e.target.value
+                                    )
                                   }
-                                }}
-                              />
-                            ) : (
-                              <span
-                                className="cursor-pointer rounded px-1 py-0.5 hover:bg-gray-100"
-                                onClick={() => handleColumnClick(col.id)}
-                              >
-                                {col.name}
-                              </span>
-                            )}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      handleColumnNameChange(
+                                        col.id,
+                                        e.currentTarget.value
+                                      );
+                                    } else if (e.key === "Escape") {
+                                      setEditingColumn(null);
+                                    }
+                                  }}
+                                />
+                              ) : (
+                                <span
+                                  className="flex-1 cursor-pointer truncate rounded px-1 py-0.5 hover:bg-gray-100"
+                                  onClick={() => handleColumnClick(col.id)}
+                                >
+                                  {col.name}
+                                </span>
+                              )}
+                            </div>
                             <ChevronDown className="h-3 w-3 text-gray-400" />
                           </div>
                         </th>
                       ))}{" "}
-                      <th className="sticky right-0 z-10 w-12 flex-shrink-0 border-b border-l border-r border-gray-200 bg-gray-50 p-0">
+                      <th className="sticky right-0 z-10 w-12 flex-shrink-0 border-b border-l border-gray-200 bg-gray-50 p-0">
                         <button
                           ref={addColumnButtonRef}
                           onClick={() => {
@@ -1451,21 +1461,26 @@ const AirtableClone = () => {
                     })}
                   </tbody>
                   <tfoot>
-                    <tr>
-                      <td
-                        colSpan={(base?.columns?.length ?? 0) + 1}
-                        className="h-10 text-center"
-                      >
+                    {/* Row Placeholder */}
+                    <tr className="flex">
+                      <td className="flex h-10 w-12 flex-shrink-0 items-center justify-center border-b border-r border-gray-200 bg-gray-50">
                         <button
                           onClick={handleAddRow}
                           disabled={addRow.isLoading}
-                          className="mx-auto flex h-6 w-6 items-center justify-center rounded text-blue-500 hover:bg-blue-50 disabled:opacity-50"
+                          className="flex h-6 w-6 items-center justify-center rounded text-blue-500 hover:bg-blue-50 disabled:opacity-50"
                           title="Add row"
                           type="button"
                         >
                           <Plus className="h-4 w-4" />
                         </button>
                       </td>
+                      {base?.columns.map((col) => (
+                        <td
+                          key={col.id}
+                          className="h-10 w-48 flex-shrink-0 border-b border-r border-gray-200"
+                        ></td>
+                      ))}
+                      <td className="sticky right-0 z-10 w-12 flex-shrink-0 bg-white"></td>
                     </tr>
                   </tfoot>
                 </table>
