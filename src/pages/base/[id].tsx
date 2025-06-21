@@ -29,21 +29,11 @@ import { Bars3BottomLeftIcon, HashtagIcon } from "@heroicons/react/24/outline";
 import Image from "next/image";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { type Prisma } from "@prisma/client";
+import { type Base, type Column } from "~/types";
+import { type Filter as FilterType } from "~/server/api/routers/base";
+import FilterComponent from "~/components/FilterComponent";
 
 // Define proper types for the data structures
-interface Column {
-  id: string;
-  baseId: string;
-  name: string;
-  order: number;
-  type: "TEXT" | "NUMBER";
-}
-
-interface Base {
-  id?: string;
-  name: string;
-  columns: Column[];
-}
 
 const AirtableClone = () => {
   const [selectedCell, setSelectedCell] = useState<{
@@ -56,6 +46,7 @@ const AirtableClone = () => {
   } | null>(null);
   const [editingColumn, setEditingColumn] = useState<string | null>(null);
   const [newColumnName, setNewColumnName] = useState("");
+  const [editingColumnName, setEditingColumnName] = useState("");
 
   const { data: session } = useSession();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -66,16 +57,14 @@ const AirtableClone = () => {
   >({});
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [showTextFilter, setShowTextFilter] = useState(false);
-  const [showNumberFilter, setShowNumberFilter] = useState(false);
-  const [filterConfig, setFilterConfig] = useState<{
-    columnId?: string;
-    type?: string;
-    value?: string;
-  }>({});
-  const [filters, setFilters] = useState<
-    Record<string, { type: string; value: string }>
-  >({});
+  const [textFilters, setTextFilters] = useState<FilterType[]>([]);
+  const [numberFilters, setNumberFilters] = useState<FilterType[]>([]);
+
+  const allFilters = useMemo(
+    () => [...textFilters, ...numberFilters],
+    [textFilters, numberFilters]
+  );
+
   const [sortConfig, setSortConfig] = useState<{
     columnId?: string;
     direction?: "asc" | "desc";
@@ -83,8 +72,6 @@ const AirtableClone = () => {
   const [showSort, setShowSort] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const sortPopupRef = useRef<HTMLDivElement>(null);
-  const textFilterPopupRef = useRef<HTMLDivElement>(null);
-  const numberFilterPopupRef = useRef<HTMLDivElement>(null);
 
   const router = useRouter();
   const baseId = router.query.id as string;
@@ -177,7 +164,7 @@ const AirtableClone = () => {
   const cellUpdateTimeouts = useRef(new Map<string, NodeJS.Timeout>());
 
   const isSortActive = !!(sortConfig.columnId && sortConfig.direction);
-  const isFilterActive = Object.keys(filters).length > 0;
+  const isFilterActive = allFilters.length > 0;
   const isClearActive = isSortActive || isFilterActive;
 
   const PAGE_SIZE = 250;
@@ -197,7 +184,7 @@ const AirtableClone = () => {
       baseId,
       limit: PAGE_SIZE,
       searchTerm,
-      filters,
+      filters: allFilters,
       sortConfig:
         sortConfig.columnId && sortConfig.direction
           ? { columnId: sortConfig.columnId, direction: sortConfig.direction }
@@ -209,6 +196,40 @@ const AirtableClone = () => {
       keepPreviousData: true,
     }
   );
+
+  const handleAddTextFilter = (filter: Omit<FilterType, "id">) => {
+    setTextFilters((prev) => [
+      ...prev,
+      { ...filter, id: `filter-${Date.now()}` },
+    ]);
+  };
+
+  const handleRemoveTextFilter = (filterId: string) => {
+    setTextFilters((prev) => prev.filter((f) => f.id !== filterId));
+  };
+
+  const handleUpdateTextFilter = (filter: FilterType) => {
+    setTextFilters((prev) =>
+      prev.map((f) => (f.id === filter.id ? filter : f))
+    );
+  };
+
+  const handleAddNumberFilter = (filter: Omit<FilterType, "id">) => {
+    setNumberFilters((prev) => [
+      ...prev,
+      { ...filter, id: `filter-${Date.now()}` },
+    ]);
+  };
+
+  const handleRemoveNumberFilter = (filterId: string) => {
+    setNumberFilters((prev) => prev.filter((f) => f.id !== filterId));
+  };
+
+  const handleUpdateNumberFilter = (filter: FilterType) => {
+    setNumberFilters((prev) =>
+      prev.map((f) => (f.id === filter.id ? filter : f))
+    );
+  };
 
   const allRows = useMemo(
     () =>
@@ -339,7 +360,7 @@ const AirtableClone = () => {
         baseId,
         limit: PAGE_SIZE,
         searchTerm,
-        filters,
+        filters: allFilters,
         sortConfig:
           sortConfig.columnId && sortConfig.direction
             ? { columnId: sortConfig.columnId, direction: sortConfig.direction }
@@ -385,7 +406,7 @@ const AirtableClone = () => {
           baseId,
           limit: PAGE_SIZE,
           searchTerm,
-          filters,
+          filters: allFilters,
           sortConfig:
             sortConfig.columnId && sortConfig.direction
               ? {
@@ -424,7 +445,7 @@ const AirtableClone = () => {
           baseId,
           limit: PAGE_SIZE,
           searchTerm,
-          filters,
+          filters: allFilters,
           sortConfig:
             sortConfig.columnId && sortConfig.direction
               ? {
@@ -446,7 +467,7 @@ const AirtableClone = () => {
         baseId,
         limit: PAGE_SIZE,
         searchTerm,
-        filters,
+        filters: allFilters,
         sortConfig:
           sortConfig.columnId && sortConfig.direction
             ? { columnId: sortConfig.columnId, direction: sortConfig.direction }
@@ -477,7 +498,7 @@ const AirtableClone = () => {
         baseId,
         limit: PAGE_SIZE,
         searchTerm,
-        filters,
+        filters: allFilters,
         sortConfig:
           sortConfig.columnId && sortConfig.direction
             ? { columnId: sortConfig.columnId, direction: sortConfig.direction }
@@ -511,7 +532,7 @@ const AirtableClone = () => {
         baseId,
         limit: PAGE_SIZE,
         searchTerm,
-        filters,
+        filters: allFilters,
         sortConfig:
           sortConfig.columnId && sortConfig.direction
             ? { columnId: sortConfig.columnId, direction: sortConfig.direction }
@@ -562,24 +583,6 @@ const AirtableClone = () => {
         setShowSort(false);
       }
 
-      // Check if click is outside text filter popup
-      if (
-        showTextFilter &&
-        textFilterPopupRef.current &&
-        !textFilterPopupRef.current.contains(target)
-      ) {
-        setShowTextFilter(false);
-      }
-
-      // Check if click is outside number filter popup
-      if (
-        showNumberFilter &&
-        numberFilterPopupRef.current &&
-        !numberFilterPopupRef.current.contains(target)
-      ) {
-        setShowNumberFilter(false);
-      }
-
       if (
         addColumnPopupRef.current &&
         !addColumnPopupRef.current.contains(event.target as Node) &&
@@ -594,7 +597,8 @@ const AirtableClone = () => {
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [showSort, showTextFilter, showNumberFilter]);
+  }, [showSort, showAddColumnPopup]);
+
   const handleAddColumn = (type: "TEXT" | "NUMBER") => {
     if (!base) return;
 
@@ -795,10 +799,11 @@ const AirtableClone = () => {
   };
 
   // Handle column editing
-  const handleColumnClick = (columnId: string) => {
+  const handleColumnClick = (columnId: string, currentName: string) => {
     // Don't edit if it's a temporary column (still being created)
     if (columnId.startsWith("temp-col-")) return;
     setEditingColumn(columnId);
+    setEditingColumnName(currentName);
   };
 
   const handleColumnNameChange = (columnId: string, newName: string) => {
@@ -885,39 +890,38 @@ const AirtableClone = () => {
     }
 
     // Apply column filters
-    if (Object.keys(filters).length > 0) {
+    if (allFilters.length > 0) {
       rows = rows.filter((row) => {
-        return Object.entries(filters).every(([colId, filter]) => {
-          const value = row.data[colId];
+        return allFilters.every((filter) => {
+          const { columnId, columnType, condition, value } = filter;
+          const cellValue = row.data[columnId];
 
-          // Text filters
-          if (
-            [
-              "contains",
-              "notContains",
-              "equal",
-              "notEqual",
-              "empty",
-              "notEmpty",
-            ].includes(filter.type)
-          ) {
-            const str = (value ?? "").toString().toLowerCase();
-            const filterVal = (filter.value ?? "").toLowerCase();
-            if (filter.type === "contains") return str.includes(filterVal);
-            if (filter.type === "notContains") return !str.includes(filterVal);
-            if (filter.type === "equal") return str === filterVal;
-            if (filter.type === "notEqual") return str !== filterVal;
-            if (filter.type === "empty") return !str;
-            if (filter.type === "notEmpty") return !!str;
-          }
+          if (columnType === "TEXT") {
+            const str = (cellValue ?? "").toString().toLowerCase();
+            const filterVal = (value ?? "").toString().toLowerCase();
+            if (condition === "contains") return str.includes(filterVal);
+            if (condition === "notContains") return !str.includes(filterVal);
+            if (condition === "equals") return str === filterVal;
+            if (condition === "notEquals") return str !== filterVal;
+            if (condition === "isEmpty") return !str;
+            if (condition === "isNotEmpty") return !!str;
+          } else if (columnType === "NUMBER") {
+            const filterNum = Number(value);
 
-          // Number filters
-          if (["gt", "lt"].includes(filter.type)) {
-            const num = Number(value);
-            const filterNum = Number(filter.value);
-            if (isNaN(num) || isNaN(filterNum)) return false;
-            if (filter.type === "gt") return num > filterNum;
-            if (filter.type === "lt") return num < filterNum;
+            // If filter value is not a valid number, skip this filter
+            if (isNaN(filterNum)) return true;
+
+            // Convert cell value to number, treat empty/null as 0
+            const cellNum =
+              cellValue === null || cellValue === undefined || cellValue === ""
+                ? 0
+                : Number(cellValue);
+                
+            // If cell value is not a valid number, treat as 0
+            const finalCellNum = isNaN(cellNum) ? 0 : cellNum;
+
+            if (condition === "gt") return finalCellNum > filterNum;
+            if (condition === "lt") return finalCellNum < filterNum;
           }
 
           return true;
@@ -946,7 +950,7 @@ const AirtableClone = () => {
     }
 
     return rows;
-  }, [allRows, searchTerm, filters, sortConfig, base?.columns]);
+  }, [allRows, searchTerm, allFilters, sortConfig, base?.columns]);
 
   if (session === undefined) {
     // Session is loading
@@ -1047,8 +1051,6 @@ const AirtableClone = () => {
             className="flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-gray-600 shadow hover:bg-gray-100"
             onClick={() => {
               setShowSort((v) => !v);
-              setShowTextFilter(false);
-              setShowNumberFilter(false);
             }}
             type="button"
           >
@@ -1095,216 +1097,28 @@ const AirtableClone = () => {
             </div>
           )}
         </div>
-        <div className="relative">
-          {" "}
-          <button
-            className="flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-gray-600 shadow hover:bg-gray-100"
-            onClick={() => {
-              setShowTextFilter((v) => !v);
-              setShowSort(false);
-              setShowNumberFilter(false);
-            }}
-            type="button"
-          >
-            <Filter className="h-4 w-4" />
-            Filter Text{" "}
-          </button>{" "}
-          {/* Text Filter Popup */}
-          {showTextFilter && (
-            <div
-              ref={textFilterPopupRef}
-              className="absolute left-0 z-10 mt-2 w-64 rounded border bg-white p-4 shadow-lg"
-            >
-              <div className="mb-2 text-xs font-semibold text-gray-700">
-                Where
-              </div>
-              <select
-                className="mb-2 w-full rounded border px-2 py-1 text-xs"
-                value={filterConfig.columnId || ""}
-                onChange={(e) =>
-                  setFilterConfig((f) => ({ ...f, columnId: e.target.value }))
-                }
-              >
-                <option value="">Select column</option>
-                {base?.columns.map((col) => (
-                  <option key={col.id} value={col.id}>
-                    {col.name}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="mb-2 w-full rounded border px-2 py-1 text-xs"
-                value={filterConfig.type || ""}
-                onChange={(e) =>
-                  setFilterConfig((f) => ({ ...f, type: e.target.value }))
-                }
-              >
-                <option value="">Select condition</option>
-                <option value="contains">Contains</option>
-                <option value="notContains">Not contains</option>
-                <option value="equal">Equal to</option>
-                <option value="notEqual">Not equal to</option>
-                <option value="empty">Is empty</option>
-                <option value="notEmpty">Is not empty</option>
-              </select>
-              {filterConfig.type &&
-                !["empty", "notEmpty"].includes(filterConfig.type) && (
-                  <input
-                    className="mb-2 w-full rounded border px-2 py-1 text-xs"
-                    value={filterConfig.value || ""}
-                    onChange={(e) =>
-                      setFilterConfig((f) => ({ ...f, value: e.target.value }))
-                    }
-                    onKeyDown={(e) => {
-                      if (
-                        e.key === "Enter" &&
-                        filterConfig.columnId &&
-                        filterConfig.type &&
-                        (["empty", "notEmpty"].includes(filterConfig.type) ||
-                          filterConfig.value)
-                      ) {
-                        setFilters((f) => ({
-                          ...f,
-                          [filterConfig.columnId!]: {
-                            type: filterConfig.type!,
-                            value: filterConfig.value || "",
-                          },
-                        }));
-                        setShowTextFilter(false);
-                        setFilterConfig({});
-                      }
-                    }}
-                    placeholder="Value"
-                  />
-                )}{" "}
-              <button
-                className={`w-full rounded ${
-                  getBaseColor ?? "bg-purple-500"
-                } py-1 text-xs font-semibold text-white hover:${
-                  getSecondaryBaseColor ?? "bg-purple-600"
-                }`}
-                onClick={() => {
-                  if (filterConfig.columnId && filterConfig.type) {
-                    setFilters((f) => ({
-                      ...f,
-                      [filterConfig.columnId as string]: {
-                        type: filterConfig.type as string,
-                        value: filterConfig.value || "",
-                      },
-                    }));
-                    setShowTextFilter(false);
-                    setFilterConfig({});
-                  }
-                }}
-              >
-                Apply
-              </button>
-            </div>
-          )}
-        </div>
-        <div className="relative">
-          {" "}
-          <button
-            className="flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-gray-600 shadow hover:bg-gray-100"
-            onClick={() => {
-              setShowNumberFilter((v) => !v);
-              setShowSort(false);
-              setShowTextFilter(false);
-            }}
-            type="button"
-          >
-            <Filter className="h-4 w-4" />
-            Filter Number{" "}
-          </button>{" "}
-          {/* Number Filter Popup */}
-          {showNumberFilter && (
-            <div
-              ref={numberFilterPopupRef}
-              className="absolute left-0 z-10 mt-2 w-64 rounded border bg-white p-4 shadow-lg"
-            >
-              <div className="mb-2 text-xs font-semibold text-gray-700">
-                Where
-              </div>
-              <select
-                className="mb-2 w-full rounded border px-2 py-1 text-xs"
-                value={filterConfig.columnId || ""}
-                onChange={(e) =>
-                  setFilterConfig((f) => ({ ...f, columnId: e.target.value }))
-                }
-              >
-                <option value="">Select column</option>
-                {base?.columns.map((col) => (
-                  <option key={col.id} value={col.id}>
-                    {col.name}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="mb-2 w-full rounded border px-2 py-1 text-xs"
-                value={filterConfig.type || ""}
-                onChange={(e) =>
-                  setFilterConfig((f) => ({ ...f, type: e.target.value }))
-                }
-              >
-                <option value="">Select condition</option>
-                <option value="gt">Greater than</option>
-                <option value="lt">Smaller than</option>
-              </select>
-              {filterConfig.type &&
-                !["empty", "notEmpty"].includes(filterConfig.type) && (
-                  <input
-                    className="mb-2 w-full rounded border px-2 py-1 text-xs"
-                    value={filterConfig.value || ""}
-                    onChange={(e) =>
-                      setFilterConfig((f) => ({ ...f, value: e.target.value }))
-                    }
-                    onKeyDown={(e) => {
-                      if (
-                        e.key === "Enter" &&
-                        filterConfig.columnId &&
-                        filterConfig.type &&
-                        (["empty", "notEmpty"].includes(filterConfig.type) ||
-                          filterConfig.value)
-                      ) {
-                        setFilters((f) => ({
-                          ...f,
-                          [filterConfig.columnId!]: {
-                            type: filterConfig.type!,
-                            value: filterConfig.value || "",
-                          },
-                        }));
-                        setShowTextFilter(false);
-                        setFilterConfig({});
-                      }
-                    }}
-                    placeholder="Value"
-                  />
-                )}
-              <button
-                className={`w-full rounded ${
-                  getBaseColor ?? "bg-purple-500"
-                } py-1 text-xs font-semibold text-white hover:${
-                  getSecondaryBaseColor ?? "bg-purple-600"
-                }`}
-                onClick={() => {
-                  if (filterConfig.columnId && filterConfig.type) {
-                    setFilters((f) => ({
-                      ...f,
-                      [filterConfig.columnId!]: {
-                        type: filterConfig.type!,
-                        value: filterConfig.value || "",
-                      },
-                    }));
-                    setShowNumberFilter(false);
-                    setFilterConfig({});
-                  }
-                }}
-              >
-                Apply
-              </button>
-            </div>
-          )}
-        </div>{" "}
+        {base && (
+          <>
+            <FilterComponent
+              columns={base.columns.filter((c) => c.type === "TEXT")}
+              filters={textFilters}
+              onAddFilter={handleAddTextFilter}
+              onRemoveFilter={handleRemoveTextFilter}
+              onUpdateFilter={handleUpdateTextFilter}
+              filterType="TEXT"
+              buttonLabel="Filter Text"
+            />
+            <FilterComponent
+              columns={base.columns.filter((c) => c.type === "NUMBER")}
+              filters={numberFilters}
+              onAddFilter={handleAddNumberFilter}
+              onRemoveFilter={handleRemoveNumberFilter}
+              onUpdateFilter={handleUpdateNumberFilter}
+              filterType="NUMBER"
+              buttonLabel="Filter Number"
+            />
+          </>
+        )}
         <button
           className={`ml-2 flex items-center rounded px-2 py-1 ${
             isClearActive
@@ -1314,7 +1128,8 @@ const AirtableClone = () => {
           disabled={!isClearActive}
           onClick={() => {
             setSortConfig({});
-            setFilters({});
+            setTextFilters([]);
+            setNumberFilters([]);
             setShowSort(false);
           }}
           title="Clear sorting and filters"
@@ -1455,7 +1270,10 @@ const AirtableClone = () => {
                                 <input
                                   autoFocus
                                   className="w-full rounded border border-blue-500 bg-white px-2 py-1 text-xs"
-                                  defaultValue={col.name}
+                                  value={editingColumnName}
+                                  onChange={(e) =>
+                                    setEditingColumnName(e.target.value)
+                                  }
                                   onBlur={(e) =>
                                     handleColumnNameChange(
                                       col.id,
@@ -1476,7 +1294,9 @@ const AirtableClone = () => {
                               ) : (
                                 <span
                                   className="flex-1 cursor-pointer truncate rounded px-1 py-0.5 hover:bg-gray-100"
-                                  onClick={() => handleColumnClick(col.id)}
+                                  onClick={() =>
+                                    handleColumnClick(col.id, col.name)
+                                  }
                                 >
                                   {col.name}
                                 </span>

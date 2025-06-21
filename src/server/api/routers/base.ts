@@ -5,6 +5,16 @@ import { ColumnType, Prisma } from "@prisma/client";
 
 const tableRowSchema = z.record(z.string());
 
+const filterSchema = z.object({
+  id: z.string(),
+  columnId: z.string(),
+  columnType: z.nativeEnum(ColumnType),
+  condition: z.string(),
+  value: z.any().optional(),
+});
+
+export type Filter = z.infer<typeof filterSchema>;
+
 export const baseRouter = createTRPCRouter({
   getAll: protectedProcedure.query(async ({ ctx }) => {
     return ctx.prisma.base.findMany({
@@ -155,9 +165,7 @@ export const baseRouter = createTRPCRouter({
         limit: z.number(),
         cursor: z.string().nullish(), // cursor can be a string or null
         searchTerm: z.string().optional(),
-        filters: z
-          .record(z.string(), z.object({ type: z.string(), value: z.string() }))
-          .optional(),
+        filters: z.array(filterSchema).optional(),
         sortConfig: z
           .object({ columnId: z.string(), direction: z.enum(["asc", "desc"]) })
           .optional(),
@@ -192,72 +200,91 @@ export const baseRouter = createTRPCRouter({
       }
 
       // Handle filters
-      if (filters) {
-        const filterConditions: Prisma.RowWhereInput[] = [];
-        for (const [colId, filter] of Object.entries(filters)) {
-          const column = columnMap.get(colId);
-          if (!column) continue;
+      if (filters && filters.length > 0) {
+        const filterConditions = filters
+          .map((filter) => {
+            const { columnId, columnType, condition, value } = filter;
 
-          const { type, value } = filter;
-          const isNumeric = column.type === "NUMBER";
-          const filterValue = isNumeric ? Number(value) : value;
+            if (columnType === "TEXT") {
+              const strValue = String(value ?? "");
+              switch (condition) {
+                case "contains":
+                  return {
+                    data: {
+                      path: [columnId],
+                      string_contains: strValue,
+                      mode: "insensitive",
+                    },
+                  };
+                case "notContains":
+                  return {
+                    NOT: {
+                      data: {
+                        path: [columnId],
+                        string_contains: strValue,
+                        mode: "insensitive",
+                      },
+                    },
+                  };
+                case "equals":
+                  return { data: { path: [columnId], equals: strValue } };
+                case "notEquals":
+                  return {
+                    NOT: { data: { path: [columnId], equals: strValue } },
+                  };
+                case "isEmpty":
+                  return {
+                    OR: [
+                      { data: { path: [columnId], equals: null } },
+                      { data: { path: [columnId], equals: "" } },
+                    ],
+                  };
+                case "isNotEmpty":
+                  return {
+                    AND: [
+                      { NOT: { data: { path: [columnId], equals: null } } },
+                      { NOT: { data: { path: [columnId], equals: "" } } },
+                    ],
+                  };
+                default:
+                  return null;
+              }
+            } else if (columnType === "NUMBER") {
+              const numValue = Number(value);
 
-          if (isNumeric && (value === "" || isNaN(filterValue as number)))
-            continue;
+              switch (condition) {
+                case "equals":
+                  if (isNaN(numValue)) return null;
+                  return { data: { path: [columnId], equals: numValue } };
+                case "notEquals":
+                  if (isNaN(numValue)) return null;
+                  return {
+                    NOT: { data: { path: [columnId], equals: numValue } },
+                  };
+                case "gt":
+                  if (isNaN(numValue)) return null;
+                  return { data: { path: [columnId], gt: numValue } };
+                case "gte":
+                  if (isNaN(numValue)) return null;
+                  return { data: { path: [columnId], gte: numValue } };
+                case "lt":
+                  if (isNaN(numValue)) return null;
+                  return { data: { path: [columnId], lt: numValue } };
+                case "lte":
+                  if (isNaN(numValue)) return null;
+                  return { data: { path: [columnId], lte: numValue } };
+                case "isEmpty":
+                  return { data: { path: [columnId], equals: null } };
+                case "isNotEmpty":
+                  return { NOT: { data: { path: [columnId], equals: null } } };
+                default:
+                  return null;
+              }
+            }
+            return null;
+          })
+          .filter((f) => f !== null) as Prisma.RowWhereInput[];
 
-          switch (type) {
-            case "contains":
-              filterConditions.push({
-                data: { path: [colId], string_contains: value },
-              });
-              break;
-            case "notContains":
-              filterConditions.push({
-                NOT: { data: { path: [colId], string_contains: value } },
-              });
-              break;
-            case "equal":
-              filterConditions.push({
-                data: { path: [colId], equals: filterValue },
-              });
-              break;
-            case "notEqual":
-              filterConditions.push({
-                NOT: { data: { path: [colId], equals: filterValue } },
-              });
-              break;
-            case "gt":
-              if (!isNumeric) continue;
-              filterConditions.push({
-                data: { path: [colId], gt: filterValue },
-              });
-              break;
-            case "lt":
-              if (!isNumeric) continue;
-              filterConditions.push({
-                data: { path: [colId], lt: filterValue },
-              });
-              break;
-            case "empty":
-              filterConditions.push({
-                OR: [
-                  { data: { path: [colId], equals: Prisma.JsonNull } },
-                  { data: { path: [colId], equals: "" } },
-                ],
-              });
-              break;
-            case "notEmpty":
-              filterConditions.push({
-                AND: [
-                  {
-                    NOT: { data: { path: [colId], equals: Prisma.JsonNull } },
-                  },
-                  { NOT: { data: { path: [colId], equals: "" } } },
-                ],
-              });
-              break;
-          }
-        }
         if (filterConditions.length > 0) {
           whereConditions.push({ AND: filterConditions });
         }
