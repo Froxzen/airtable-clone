@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { faker } from "@faker-js/faker";
-import { ColumnType } from "@prisma/client";
+import { ColumnType, Prisma } from "@prisma/client";
 
 const tableRowSchema = z.record(z.string());
 
@@ -164,9 +164,8 @@ export const baseRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const { baseId, offset, limit, searchTerm, filters, sortConfig } = input;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const where: any = { baseId };
-      const whereConditions = [];
+      const where: Prisma.RowWhereInput = { baseId };
+      const whereConditions: Prisma.RowWhereInput[] = [];
 
       const columns = await ctx.prisma.column.findMany({
         where: { baseId: input.baseId },
@@ -182,7 +181,6 @@ export const baseRouter = createTRPCRouter({
             data: {
               path: [col.id],
               string_contains: searchTerm,
-              mode: "insensitive",
             },
           }));
 
@@ -193,6 +191,7 @@ export const baseRouter = createTRPCRouter({
 
       // Handle filters
       if (filters) {
+        const filterConditions: Prisma.RowWhereInput[] = [];
         for (const [colId, filter] of Object.entries(filters)) {
           const column = columnMap.get(colId);
           if (!column) continue;
@@ -204,58 +203,61 @@ export const baseRouter = createTRPCRouter({
           if (isNumeric && (value === "" || isNaN(filterValue as number)))
             continue;
 
-          let condition;
           switch (type) {
             case "contains":
-              condition = {
-                path: [colId],
-                string_contains: value,
-                mode: "insensitive",
-              };
+              filterConditions.push({
+                data: { path: [colId], string_contains: value },
+              });
               break;
             case "notContains":
-              condition = {
-                NOT: {
-                  path: [colId],
-                  string_contains: value,
-                  mode: "insensitive",
-                },
-              };
+              filterConditions.push({
+                NOT: { data: { path: [colId], string_contains: value } },
+              });
               break;
             case "equal":
-              condition = { path: [colId], equals: filterValue };
+              filterConditions.push({
+                data: { path: [colId], equals: filterValue },
+              });
               break;
             case "notEqual":
-              condition = { NOT: { path: [colId], equals: filterValue } };
+              filterConditions.push({
+                NOT: { data: { path: [colId], equals: filterValue } },
+              });
               break;
             case "gt":
               if (!isNumeric) continue;
-              condition = { path: [colId], gt: filterValue };
+              filterConditions.push({
+                data: { path: [colId], gt: filterValue },
+              });
               break;
             case "lt":
               if (!isNumeric) continue;
-              condition = { path: [colId], lt: filterValue };
+              filterConditions.push({
+                data: { path: [colId], lt: filterValue },
+              });
               break;
             case "empty":
-              condition = {
+              filterConditions.push({
                 OR: [
-                  { path: [colId], equals: null },
-                  { path: [colId], equals: "" },
+                  { data: { path: [colId], equals: Prisma.JsonNull } },
+                  { data: { path: [colId], equals: "" } },
                 ],
-              };
+              });
               break;
             case "notEmpty":
-              condition = {
+              filterConditions.push({
                 AND: [
-                  { NOT: { path: [colId], equals: null } },
-                  { NOT: { path: [colId], equals: "" } },
+                  {
+                    NOT: { data: { path: [colId], equals: Prisma.JsonNull } },
+                  },
+                  { NOT: { data: { path: [colId], equals: "" } } },
                 ],
-              };
+              });
               break;
           }
-          if (condition) {
-            whereConditions.push({ data: condition });
-          }
+        }
+        if (filterConditions.length > 0) {
+          whereConditions.push({ AND: filterConditions });
         }
       }
 
@@ -267,6 +269,9 @@ export const baseRouter = createTRPCRouter({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let orderBy: any = { id: "asc" };
       if (sortConfig?.columnId && sortConfig?.direction) {
+        // The generated Prisma type for `RowOrderByWithRelationInput` does not correctly
+        // reflect the ability to sort by a nested JSON field path, so we use `as any`
+        // here to bypass the type checker. This is a known limitation in some cases.
         orderBy = {
           data: {
             path: [sortConfig.columnId],
