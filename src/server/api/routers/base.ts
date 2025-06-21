@@ -40,19 +40,15 @@ export const baseRouter = createTRPCRouter({
           data: { name: "Address", baseId: base.id, order: 1 },
         }),
         ctx.prisma.column.create({
-          data: { name: "Phone Number", baseId: base.id, order: 2 },
-        }),
-        ctx.prisma.column.create({
           data: { name: "Email", baseId: base.id, order: 3 },
         }),
       ]);
 
       // 3. Create 5 rows with faker data
-      const [nameCol, addressCol, phoneCol, emailCol] = columns;
+      const [nameCol, addressCol, emailCol] = columns;
       const rowsData = Array.from({ length: 5 }).map(() => ({
         [nameCol.id]: faker.person.fullName(),
         [addressCol.id]: faker.location.streetAddress(),
-        [phoneCol.id]: faker.phone.number(),
         [emailCol.id]: faker.internet.email(),
       }));
 
