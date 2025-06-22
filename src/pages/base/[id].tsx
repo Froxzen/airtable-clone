@@ -244,12 +244,94 @@ const AirtableClone = () => {
     [infiniteData]
   );
 
+  // Single computed variable that handles all filtering, sorting, and searching
+  const processedRows = useMemo(() => {
+    if (!allRows.length) return [];
+
+    let rows = allRows;
+
+    // Apply search filter
+    if (searchTerm) {
+      rows = rows.filter((row) => {
+        return base?.columns?.some((col) => {
+          const value = row.data[col.id];
+          return (
+            value &&
+            value.toString().toLowerCase().includes(searchTerm.toLowerCase())
+          );
+        });
+      });
+    }
+
+    // Apply column filters
+    if (allFilters.length > 0) {
+      rows = rows.filter((row) => {
+        return allFilters.every((filter) => {
+          const { columnId, columnType, condition, value } = filter;
+          const cellValue = row.data[columnId];
+
+          if (columnType === "TEXT") {
+            const str = (cellValue ?? "").toString().toLowerCase();
+            const filterVal = (value ?? "").toString().toLowerCase();
+            if (condition === "contains") return str.includes(filterVal);
+            if (condition === "notContains") return !str.includes(filterVal);
+            if (condition === "equals") return str === filterVal;
+            if (condition === "notEquals") return str !== filterVal;
+            if (condition === "isEmpty") return !str;
+            if (condition === "isNotEmpty") return !!str;
+          } else if (columnType === "NUMBER") {
+            const filterNum = Number(value);
+
+            // If filter value is not a valid number, skip this filter
+            if (isNaN(filterNum)) return true;
+
+            // Convert cell value to number, treat empty/null as 0
+            const cellNum =
+              cellValue === null || cellValue === undefined || cellValue === ""
+                ? 0
+                : Number(cellValue);
+
+            // If cell value is not a valid number, treat as 0
+            const finalCellNum = isNaN(cellNum) ? 0 : cellNum;
+
+            if (condition === "gt") return finalCellNum > filterNum;
+            if (condition === "lt") return finalCellNum < filterNum;
+          }
+
+          return true;
+        });
+      });
+    }
+
+    // Apply sorting
+    if (sortConfig.columnId && sortConfig.direction) {
+      const colId = sortConfig.columnId;
+      rows = [...rows].sort((a, b) => {
+        const aVal = a.data[colId];
+        const bVal = b.data[colId];
+        // Try number sort first, fallback to string
+        const aNum = Number(aVal);
+        const bNum = Number(bVal);
+        if (!isNaN(aNum) && !isNaN(bNum)) {
+          return sortConfig.direction === "asc" ? aNum - bNum : bNum - aNum;
+        }
+        const aStr = (aVal ?? "").toString().toLowerCase();
+        const bStr = (bVal ?? "").toString().toLowerCase();
+        if (aStr < bStr) return sortConfig.direction === "asc" ? -1 : 1;
+        if (aStr > bStr) return sortConfig.direction === "asc" ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return rows;
+  }, [allRows, searchTerm, allFilters, sortConfig, base?.columns]);
+
   type Row = (typeof allRows)[number];
 
   const tableContainerRef = useRef<HTMLDivElement>(null);
 
   const rowVirtualizer = useVirtualizer({
-    count: allRows.length,
+    count: processedRows.length,
     estimateSize: () => 40,
     getScrollElement: () => tableContainerRef.current,
     overscan: 10,
@@ -264,7 +346,7 @@ const AirtableClone = () => {
     }
 
     if (
-      lastItem.index >= allRows.length - 5 &&
+      lastItem.index >= processedRows.length - 5 &&
       hasNextPage &&
       !isFetchingNextPage
     ) {
@@ -272,7 +354,7 @@ const AirtableClone = () => {
     }
   }, [
     virtualItems,
-    allRows.length,
+    processedRows.length,
     hasNextPage,
     isFetchingNextPage,
     fetchNextPage,
@@ -901,87 +983,6 @@ const AirtableClone = () => {
     await utils.base.getRowsInfinite.invalidate({ baseId });
     setIsBulkAdding(false);
   };
-  // Single computed variable that handles all filtering, sorting, and searching
-  const processedRows = useMemo(() => {
-    if (!allRows.length) return [];
-
-    let rows = allRows;
-
-    // Apply search filter
-    if (searchTerm) {
-      rows = rows.filter((row) => {
-        return base?.columns?.some((col) => {
-          const value = row.data[col.id];
-          return (
-            value &&
-            value.toString().toLowerCase().includes(searchTerm.toLowerCase())
-          );
-        });
-      });
-    }
-
-    // Apply column filters
-    if (allFilters.length > 0) {
-      rows = rows.filter((row) => {
-        return allFilters.every((filter) => {
-          const { columnId, columnType, condition, value } = filter;
-          const cellValue = row.data[columnId];
-
-          if (columnType === "TEXT") {
-            const str = (cellValue ?? "").toString().toLowerCase();
-            const filterVal = (value ?? "").toString().toLowerCase();
-            if (condition === "contains") return str.includes(filterVal);
-            if (condition === "notContains") return !str.includes(filterVal);
-            if (condition === "equals") return str === filterVal;
-            if (condition === "notEquals") return str !== filterVal;
-            if (condition === "isEmpty") return !str;
-            if (condition === "isNotEmpty") return !!str;
-          } else if (columnType === "NUMBER") {
-            const filterNum = Number(value);
-
-            // If filter value is not a valid number, skip this filter
-            if (isNaN(filterNum)) return true;
-
-            // Convert cell value to number, treat empty/null as 0
-            const cellNum =
-              cellValue === null || cellValue === undefined || cellValue === ""
-                ? 0
-                : Number(cellValue);
-
-            // If cell value is not a valid number, treat as 0
-            const finalCellNum = isNaN(cellNum) ? 0 : cellNum;
-
-            if (condition === "gt") return finalCellNum > filterNum;
-            if (condition === "lt") return finalCellNum < filterNum;
-          }
-
-          return true;
-        });
-      });
-    }
-
-    // Apply sorting
-    if (sortConfig.columnId && sortConfig.direction) {
-      const colId = sortConfig.columnId;
-      rows = [...rows].sort((a, b) => {
-        const aVal = a.data[colId];
-        const bVal = b.data[colId];
-        // Try number sort first, fallback to string
-        const aNum = Number(aVal);
-        const bNum = Number(bVal);
-        if (!isNaN(aNum) && !isNaN(bNum)) {
-          return sortConfig.direction === "asc" ? aNum - bNum : bNum - aNum;
-        }
-        const aStr = (aVal ?? "").toString().toLowerCase();
-        const bStr = (bVal ?? "").toString().toLowerCase();
-        if (aStr < bStr) return sortConfig.direction === "asc" ? -1 : 1;
-        if (aStr > bStr) return sortConfig.direction === "asc" ? 1 : -1;
-        return 0;
-      });
-    }
-
-    return rows;
-  }, [allRows, searchTerm, allFilters, sortConfig, base?.columns]);
 
   if (session === undefined) {
     // Session is loading
