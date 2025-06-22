@@ -247,7 +247,7 @@ const AirtableClone = () => {
           const columnType = filter.columnType;
           const condition = filter.condition;
           const value = filter.value;
-          const cellValue = row.data[columnId];
+          const cellValue = row.data[columnId] as unknown;
 
           if (columnType === "TEXT") {
             const str = String(cellValue ?? "").toLowerCase();

@@ -211,7 +211,7 @@ export const baseRouter = createTRPCRouter({
             const columnId = filter.columnId;
             const columnType = filter.columnType;
             const condition = filter.condition;
-            const value = filter.value;
+            const value = filter.value as unknown;
 
             if (columnType === "TEXT") {
               const strValue = String(value ?? "");
