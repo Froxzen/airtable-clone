@@ -279,21 +279,57 @@ export const baseRouter = createTRPCRouter({
       }
       if (whereConditions.length > 0) {
         where.AND = whereConditions;
-      } // Handle sorting
+      }
+
+      // Fast path for simple queries (no search, no filters, no sorting)
+      // This is the most common case and should be very fast
+      const hasComplexQuery =
+        searchTerm ||
+        (filters && filters.length > 0) ||
+        (sortConfig && sortConfig.length > 0);
+      if (!hasComplexQuery) {
+        // Simple case: just fetch by ID with cursor pagination
+        // Only select necessary fields for better performance
+        const rows = await ctx.prisma.row.findMany({
+          where,
+          select: {
+            id: true,
+            baseId: true,
+            data: true,
+            // Don't select createdAt/updatedAt for better performance
+          },
+          orderBy: [{ id: "asc" }],
+          cursor: cursor ? { id: cursor } : undefined,
+          take: limit + 1,
+        });
+
+        let nextCursor: string | undefined = undefined;
+        if (rows.length > limit) {
+          const nextItem = rows.pop();
+          nextCursor = nextItem?.id;
+        }
+
+        return {
+          rows,
+          nextCursor,
+        };
+      }
+
+      // Handle sorting
       // For JSON fields in Prisma, we need to use raw queries or handle sorting in application code
       // Since Prisma doesn't support direct JSON field sorting with the syntax we were using,
       // we'll fetch all data and sort in JavaScript
-      let orderBy: Prisma.RowOrderByWithRelationInput[] = [{ id: "asc" }];
-
-      // We'll handle sorting in JavaScript after fetching the data
+      let orderBy: Prisma.RowOrderByWithRelationInput[] = [{ id: "asc" }]; // We'll handle sorting in JavaScript after fetching the data
       // because Prisma's JSON sorting syntax is limited
+      // But limit the fetch size for performance with large datasets
+      const fetchLimit = Math.min(limit * 10, 5000); // Fetch at most 5000 rows for sorting
 
       const rows = await ctx.prisma.row.findMany({
         where,
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         orderBy,
         cursor: cursor ? { id: cursor } : undefined,
-        take: limit + 1, // get an extra item to see if there's a next page
+        take: fetchLimit + 1, // get extra items for sorting and pagination
       });
 
       // Apply sorting in JavaScript since Prisma JSON field sorting is limited
@@ -340,11 +376,13 @@ export const baseRouter = createTRPCRouter({
           return 0;
         });
       }
-
       let nextCursor: string | undefined = undefined;
       if (sortedRows.length > limit) {
-        const nextItem = sortedRows.pop(); // return the correct number of items
+        // Take only the requested number of rows
+        const returnRows = sortedRows.slice(0, limit);
+        const nextItem = sortedRows[limit];
         nextCursor = nextItem?.id;
+        sortedRows = returnRows;
       }
 
       return {

@@ -200,8 +200,8 @@ const AirtableClone = () => {
   const isFilterActive = allFilters.length > 0;
   const isClearActive = isSortActive || isFilterActive;
 
-  const PAGE_SIZE = 250;
   const [isBulkAdding, setIsBulkAdding] = useState(false);
+  const PAGE_SIZE = isBulkAdding ? 500 : 250; // Larger page size during bulk operations
   const [showAddColumnPopup, setShowAddColumnPopup] = useState(false);
   const addColumnButtonRef = useRef<HTMLButtonElement>(null);
   const addColumnPopupRef = useRef<HTMLDivElement>(null);
@@ -214,9 +214,10 @@ const AirtableClone = () => {
     {
       baseId,
       limit: PAGE_SIZE,
-      searchTerm,
-      filters: allFilters,
-      sortConfig: sorts,
+      // Only pass complex query params when not bulk adding
+      searchTerm: isBulkAdding ? undefined : searchTerm,
+      filters: isBulkAdding ? undefined : allFilters,
+      sortConfig: isBulkAdding ? undefined : sorts,
     },
     {
       enabled: !!baseId,
@@ -980,7 +981,7 @@ const AirtableClone = () => {
     const emptyData = Object.fromEntries(
       base.columns.map((col) => [col.id, ""])
     );
-    const totalRows = 100000;
+    const totalRows = 1000;
     const BATCH_SIZE = 1250;
 
     const batches = [];
@@ -1003,8 +1004,14 @@ const AirtableClone = () => {
       );
     }
 
-    // Invalidate the infinite query to refetch all rows
-    await utils.base.getRowsInfinite.invalidate({ baseId });
+    // Reset to clean state first (no filters/sorts) for fastest loading
+    // This will use the fast path in the backend
+    await utils.base.getRowsInfinite.reset({
+      baseId,
+      limit: PAGE_SIZE,
+      // Don't pass any filters, sorts, or search terms for fastest reset
+    });
+
     setIsBulkAdding(false);
   };
 
