@@ -1101,14 +1101,26 @@ const AirtableClone = () => {
         console.error("Failed to add rows:", error);
       },
     });
-
-  const handleAddManyRows = () => {
-    if (!base || isAddingManyRows) return;
-
-    addManyRows({
-      baseId,
-      count: 100000,
-    });
+  const handleAddManyRows = async () => {
+    if (!base || isAddingManyRows) return; // Add 5k rows 20 times for optimal progressive loading
+    for (let i = 0; i < 20; i++) {
+      await new Promise<void>((resolve) => {
+        addManyRows(
+          {
+            baseId,
+            count: 5000,
+          },
+          {
+            onSuccess: () => {
+              resolve();
+            },
+            onError: () => {
+              resolve(); // Continue even if one batch fails
+            },
+          }
+        );
+      });
+    }
   };
 
   // Helper function to check if a row matches the current filters, sorts, and search
