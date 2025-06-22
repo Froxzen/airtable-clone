@@ -25,6 +25,7 @@ import { type Prisma } from "@prisma/client";
 import { type Base, type Sort, type Column } from "~/types";
 import { type Filter as FilterType } from "~/server/api/routers/base";
 import FilterComponent from "~/components/FilterComponent";
+import { flushSync } from "react-dom";
 
 // Define proper types for the data structures
 
@@ -1031,94 +1032,71 @@ const AirtableClone = () => {
 
   const [isAdding, setIsAdding] = useState(false);
 
-  const { mutateAsync: addManyRows } = trpc.base.addManyRows.useMutation({
-    onSuccess: (data) => {
-      const newRows = data.rows.map((row) => ({
-        ...row,
-        data:
-          row.data && typeof row.data === "object" && !Array.isArray(row.data)
-            ? row.data
-            : {},
-      }));
+  const { mutate: addManyRows, isLoading: isAddingManyRows } =
+    trpc.base.addManyRows.useMutation({
+      onSuccess: (data) => {
+        const newRows = data.rows.map((row) => ({
+          ...row,
+          data:
+            row.data && typeof row.data === "object" && !Array.isArray(row.data)
+              ? row.data
+              : {},
+        }));
 
-      const queryKey = {
-        baseId,
-        limit: PAGE_SIZE,
-        searchTerm,
-        filters: allFilters,
-        sortConfig: sorts,
-      };
-
-      utils.base.getRowsInfinite.setInfiniteData(queryKey, (old) => {
-        if (!old) {
-          return {
-            pages: [{ rows: newRows, nextCursor: undefined }],
-            pageParams: [undefined],
-          };
-        }
-
-        const newPages = [...old.pages];
-        const lastPage = newPages[newPages.length - 1];
-
-        if (lastPage) {
-          newPages[newPages.length - 1] = {
-            ...lastPage,
-            rows: [...lastPage.rows, ...newRows],
-          };
-        } else {
-          newPages.push({ rows: newRows, nextCursor: undefined });
-        }
-
-        return {
-          ...old,
-          pages: newPages,
+        const queryKey = {
+          baseId,
+          limit: PAGE_SIZE,
+          searchTerm,
+          filters: allFilters,
+          sortConfig: sorts,
         };
-      });
-    },
-    onError: (error) => {
-      console.error("Failed to add rows:", error);
-    },
-  });
 
-  const handleAddManyRows = async () => {
-    if (!base || isAdding) return;
+        const previousRowCount = allRows.length;
 
-    setIsAdding(true);
-    const originalRowCount = allRows.length;
+        flushSync(() => {
+          utils.base.getRowsInfinite.setInfiniteData(queryKey, (old) => {
+            if (!old) {
+              return {
+                pages: [{ rows: newRows, nextCursor: undefined }],
+                pageParams: [undefined],
+              };
+            }
 
-    const emptyData = Object.fromEntries(
-      base.columns.map((col) => [col.id, ""])
-    );
-    const totalRows = 100;
-    const BATCH_SIZE = 25;
+            const newPages = [...old.pages];
+            const lastPage = newPages[newPages.length - 1];
 
-    const batches = [];
-    for (let i = 0; i < totalRows; i += BATCH_SIZE) {
-      const batchData = Array(BATCH_SIZE).fill({ data: emptyData });
-      batches.push(batchData);
-    }
+            if (lastPage) {
+              newPages[newPages.length - 1] = {
+                ...lastPage,
+                rows: [...lastPage.rows, ...newRows],
+              };
+            } else {
+              newPages.push({ rows: newRows, nextCursor: undefined });
+            }
 
-    try {
-      await Promise.all(
-        batches.map((batch) =>
-          addManyRows({
-            baseId,
-            rows: batch,
-          })
-        )
-      );
-    } catch (error) {
-      console.error("Error adding rows in parallel", error);
-    } finally {
-      setIsAdding(false);
-    }
+            return {
+              ...old,
+              pages: newPages,
+            };
+          });
+        });
 
-    // After all batches are done, scroll to the new rows
-    setTimeout(() => {
-      rowVirtualizer.scrollToIndex(originalRowCount, {
-        align: "start",
-      });
-    }, 100);
+        rowVirtualizer.scrollToIndex(previousRowCount, {
+          align: "start",
+        });
+      },
+      onError: (error) => {
+        console.error("Failed to add rows:", error);
+      },
+    });
+
+  const handleAddManyRows = () => {
+    if (!base || isAddingManyRows) return;
+
+    addManyRows({
+      baseId,
+      count: 1000,
+    });
   };
 
   // Helper function to check if a row matches the current filters, sorts, and search
@@ -1278,13 +1256,21 @@ const AirtableClone = () => {
       {/* Controls Bar: Sort, Filter, Search */}
       <div className="flex items-center gap-4 border-b border-gray-200 bg-purple-50 px-4 py-3">
         <button
-          onClick={() => {
-            void handleAddManyRows();
-          }}
-          className="flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-gray-600 shadow hover:bg-gray-100"
+          onClick={handleAddManyRows}
+          disabled={isAddingManyRows}
+          className="flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-gray-600 shadow hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <Plus className="h-4 w-4" />
-          <span>Add 100k rows</span>
+          {isAddingManyRows ? (
+            <>
+              <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-gray-900" />
+              <span className="ml-2">Adding...</span>
+            </>
+          ) : (
+            <>
+              <Plus className="h-4 w-4" />
+              <span>Add 100 rows</span>
+            </>
+          )}
         </button>
         <div className="relative inline-block">
           <button

@@ -147,21 +147,56 @@ export const baseRouter = createTRPCRouter({
     .input(
       z.object({
         baseId: z.string(),
-        rows: z.array(z.record(z.string(), z.any())),
+        count: z.number(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const createdRows = await ctx.prisma.$transaction(
-        input.rows.map((rowData) =>
-          ctx.prisma.row.create({
-            data: {
-              baseId: input.baseId,
-              data: rowData,
-            },
-          })
-        )
-      );
-      return { rows: createdRows };
+      const { baseId, count } = input;
+
+      const columns = await ctx.prisma.column.findMany({
+        where: { baseId },
+        orderBy: { order: "asc" },
+      });
+
+      if (columns.length === 0) {
+        return { rows: [] };
+      }
+
+      const rowsData = Array.from({ length: count }).map(() => {
+        const row: Record<string, any> = {};
+        columns.forEach((col) => {
+          if (col.type === "TEXT") {
+            row[col.id] = faker.person.fullName();
+          } else if (col.type === "NUMBER") {
+            row[col.id] = faker.number.int({ min: 100, max: 999 });
+          } else {
+            row[col.id] = "";
+          }
+        });
+        return row;
+      });
+
+      const dataToCreate = rowsData.map((rowData) => ({
+        baseId: input.baseId,
+        data: rowData as Prisma.JsonObject,
+      }));
+
+      await ctx.prisma.row.createMany({
+        data: dataToCreate,
+      });
+
+      // Fetch the newly created rows since createMany doesn't return them
+      const newRows = await ctx.prisma.row.findMany({
+        where: {
+          baseId: input.baseId,
+        },
+        orderBy: {
+          id: "desc",
+        },
+        take: count,
+      });
+
+      return { rows: newRows.reverse() };
     }),
   getRowsInfinite: protectedProcedure
     .input(
