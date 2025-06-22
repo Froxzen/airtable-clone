@@ -50,7 +50,6 @@ const AirtableClone = () => {
   const [localCellValues, setLocalCellValues] = useState<
     Record<string, string>
   >({});
-
   const [searchTerm, setSearchTerm] = useState("");
   const [textFilters, setTextFilters] = useState<FilterType[]>([]);
   const [numberFilters, setNumberFilters] = useState<FilterType[]>([]);
@@ -60,6 +59,60 @@ const AirtableClone = () => {
   );
 
   const [sorts, setSorts] = useState<Sort[]>([]);
+
+  // Load persisted filters and sorts on mount
+  useEffect(() => {
+    if (!baseId) return;
+
+    const persistedTextFilters = localStorage.getItem(`textFilters_${baseId}`);
+    const persistedNumberFilters = localStorage.getItem(
+      `numberFilters_${baseId}`
+    );
+    const persistedSorts = localStorage.getItem(`sorts_${baseId}`);
+
+    if (persistedTextFilters) {
+      try {
+        setTextFilters(JSON.parse(persistedTextFilters));
+      } catch (e) {
+        console.error("Failed to parse persisted text filters:", e);
+      }
+    }
+
+    if (persistedNumberFilters) {
+      try {
+        setNumberFilters(JSON.parse(persistedNumberFilters));
+      } catch (e) {
+        console.error("Failed to parse persisted number filters:", e);
+      }
+    }
+
+    if (persistedSorts) {
+      try {
+        setSorts(JSON.parse(persistedSorts));
+      } catch (e) {
+        console.error("Failed to parse persisted sorts:", e);
+      }
+    }
+  }, [baseId]);
+
+  // Persist filters and sorts whenever they change
+  useEffect(() => {
+    if (!baseId) return;
+    localStorage.setItem(`textFilters_${baseId}`, JSON.stringify(textFilters));
+  }, [baseId, textFilters]);
+
+  useEffect(() => {
+    if (!baseId) return;
+    localStorage.setItem(
+      `numberFilters_${baseId}`,
+      JSON.stringify(numberFilters)
+    );
+  }, [baseId, numberFilters]);
+
+  useEffect(() => {
+    if (!baseId) return;
+    localStorage.setItem(`sorts_${baseId}`, JSON.stringify(sorts));
+  }, [baseId, sorts]);
   const [showSort, setShowSort] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const sortPopupRef = useRef<HTMLDivElement>(null);
@@ -927,7 +980,7 @@ const AirtableClone = () => {
     const emptyData = Object.fromEntries(
       base.columns.map((col) => [col.id, ""])
     );
-    const totalRows = 10000;
+    const totalRows = 100000;
     const BATCH_SIZE = 1250;
 
     const batches = [];
@@ -1047,7 +1100,7 @@ const AirtableClone = () => {
           className="flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-gray-600 shadow hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Plus className="h-4 w-4" />
-          <span>{isBulkAdding ? "Adding..." : "Add 10k rows"}</span>
+          <span>{isBulkAdding ? "Adding..." : "Add 100k rows"}</span>
         </button>
         <div className="relative inline-block">
           <button
@@ -1196,7 +1249,7 @@ const AirtableClone = () => {
               buttonLabel="Filter Number"
             />
           </>
-        )}
+        )}{" "}
         <button
           className={`ml-2 flex items-center rounded px-2 py-1 ${
             isClearActive
@@ -1209,6 +1262,12 @@ const AirtableClone = () => {
             setTextFilters([]);
             setNumberFilters([]);
             setShowSort(false);
+            // Clear persisted data
+            if (baseId) {
+              localStorage.removeItem(`textFilters_${baseId}`);
+              localStorage.removeItem(`numberFilters_${baseId}`);
+              localStorage.removeItem(`sorts_${baseId}`);
+            }
           }}
           title="Clear sorting and filters"
           type="button"

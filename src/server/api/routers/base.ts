@@ -221,7 +221,6 @@ export const baseRouter = createTRPCRouter({
                     data: {
                       path: [columnId],
                       string_contains: strValue,
-                      mode: "insensitive",
                     },
                   };
                 case "notContains":
@@ -230,7 +229,6 @@ export const baseRouter = createTRPCRouter({
                       data: {
                         path: [columnId],
                         string_contains: strValue,
-                        mode: "insensitive",
                       },
                     },
                   };
