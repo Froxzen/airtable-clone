@@ -656,7 +656,7 @@ const AirtableClone = () => {
           return;
         }
         if (value === "") {
-          finalValue = null; 
+          finalValue = null;
         } else {
           const numValue = Number(value);
           if (isNaN(numValue)) {
@@ -1064,19 +1064,20 @@ const AirtableClone = () => {
           <div className="flex items-center space-x-1">
             <span>Table 1</span>
           </div>
-          <div
-            className="flex cursor-pointer items-center space-x-1 rounded bg-white/20 px-2 py-1 hover:bg-white/30"
-            onClick={() => {
-              void handleAddManyRows();
-            }}
-          >
-            <Plus className="h-4 w-4" />
-            <span>Add 10k rows</span>
-          </div>{" "}
         </div>{" "}
       </div>
       {/* Controls Bar: Sort, Filter, Search */}
       <div className="flex items-center gap-4 border-b border-gray-200 bg-purple-50 px-4 py-3">
+        <button
+          onClick={() => {
+            void handleAddManyRows();
+          }}
+          disabled={isBulkAdding}
+          className="flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-gray-600 shadow hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Plus className="h-4 w-4" />
+          <span>{isBulkAdding ? "Adding..." : "Add 10k rows"}</span>
+        </button>
         <div className="relative inline-block">
           {" "}
           <button
