@@ -645,12 +645,33 @@ const AirtableClone = () => {
       const row = allRows.find((r) => r.id === rowId);
       if (!row) return;
 
+      const col = base?.columns.find((c) => c.id === colId);
       const dataObj = row.data ?? {};
-      const newData = { ...dataObj, [colId]: value };
+      let finalValue: string | number | null = value;
+
+      if (col?.type === "NUMBER") {
+        // User might still be typing a valid number (e.g., "12.", "-")
+        // We don't want to save these intermediate states.
+        if (value.endsWith(".") || value === "-") {
+          return;
+        }
+        if (value === "") {
+          finalValue = null; // Store empty number cell as null
+        } else {
+          const numValue = Number(value);
+          if (isNaN(numValue)) {
+            finalValue = null; // If not a valid number, store as null
+          } else {
+            finalValue = numValue;
+          }
+        }
+      }
+
+      const newData = { ...dataObj, [colId]: finalValue };
 
       void updateRow.mutateAsync({ rowId, data: newData });
       cellUpdateTimeouts.current.delete(key);
-    }, 300);
+    }, 300); // Debounce time
 
     cellUpdateTimeouts.current.set(key, timeout);
   };
@@ -749,27 +770,38 @@ const AirtableClone = () => {
       if (col) {
         const key = `${row.id}-${col.id}`;
 
+        // Immediately clear any pending debounced update for this cell
         const existingTimeout = cellUpdateTimeouts.current.get(key);
         if (existingTimeout) {
           clearTimeout(existingTimeout);
           cellUpdateTimeouts.current.delete(key);
         }
 
+        // Use the most recent value from the local state
         if (localCellValues[key] !== undefined) {
-          let value = localCellValues[key];
+          let value: string | number | null = localCellValues[key];
           const dataObj = row.data ?? {};
 
           if (col.type === "NUMBER") {
-            if (value !== "" && isNaN(Number(value))) {
-              value = "";
+            if (value === "" || value === null) {
+              value = null;
+            } else {
+              const numValue = Number(value);
+              if (isNaN(numValue)) {
+                value = null; // If invalid, save as null
+              } else {
+                value = numValue;
+              }
             }
           }
 
           const newData = { ...dataObj, [col.id]: value };
+          // Directly call the mutation, bypassing the debounce
           void updateRow.mutateAsync({ rowId: row.id, data: newData });
         }
       }
     }
+    // Clear the local value after saving
     setLocalCellValues({});
 
     if (direction === "down") {
@@ -916,7 +948,7 @@ const AirtableClone = () => {
               cellValue === null || cellValue === undefined || cellValue === ""
                 ? 0
                 : Number(cellValue);
-                
+
             // If cell value is not a valid number, treat as 0
             const finalCellNum = isNaN(cellNum) ? 0 : cellNum;
 

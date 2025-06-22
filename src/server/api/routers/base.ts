@@ -50,15 +50,19 @@ export const baseRouter = createTRPCRouter({
           data: { name: "Address", baseId: base.id, order: 1 },
         }),
         ctx.prisma.column.create({
+          data: { name: "Score", baseId: base.id, order: 2, type: "NUMBER" },
+        }),
+        ctx.prisma.column.create({
           data: { name: "Email", baseId: base.id, order: 3 },
         }),
       ]);
 
       // 3. Create 5 rows with faker data
-      const [nameCol, addressCol, emailCol] = columns;
+      const [nameCol, addressCol, scoreCol, emailCol] = columns;
       const rowsData = Array.from({ length: 5 }).map(() => ({
         [nameCol.id]: faker.person.fullName(),
         [addressCol.id]: faker.location.streetAddress(),
+        [scoreCol.id]: faker.number.int({ min: 0, max: 1000 }),
         [emailCol.id]: faker.internet.email(),
       }));
 
@@ -253,30 +257,12 @@ export const baseRouter = createTRPCRouter({
               const numValue = Number(value);
 
               switch (condition) {
-                case "equals":
-                  if (isNaN(numValue)) return null;
-                  return { data: { path: [columnId], equals: numValue } };
-                case "notEquals":
-                  if (isNaN(numValue)) return null;
-                  return {
-                    NOT: { data: { path: [columnId], equals: numValue } },
-                  };
                 case "gt":
                   if (isNaN(numValue)) return null;
                   return { data: { path: [columnId], gt: numValue } };
-                case "gte":
-                  if (isNaN(numValue)) return null;
-                  return { data: { path: [columnId], gte: numValue } };
                 case "lt":
                   if (isNaN(numValue)) return null;
                   return { data: { path: [columnId], lt: numValue } };
-                case "lte":
-                  if (isNaN(numValue)) return null;
-                  return { data: { path: [columnId], lte: numValue } };
-                case "isEmpty":
-                  return { data: { path: [columnId], equals: null } };
-                case "isNotEmpty":
-                  return { NOT: { data: { path: [columnId], equals: null } } };
                 default:
                   return null;
               }
