@@ -1376,8 +1376,8 @@ const AirtableClone = () => {
                           <ChevronDown className="h-3 w-3 text-gray-400" />
                         </div>
                       </th>
-                    ))}
-                    <th className="w-12 flex-shrink-0 border-b border-l border-gray-200 bg-gray-50 p-0">
+                    ))}{" "}
+                    <th className="w-12 flex-shrink-0 border-b border-l border-r border-gray-200 bg-gray-50 p-0">
                       <button
                         ref={addColumnButtonRef}
                         onClick={() => {
