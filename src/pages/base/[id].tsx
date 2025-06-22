@@ -656,11 +656,11 @@ const AirtableClone = () => {
           return;
         }
         if (value === "") {
-          finalValue = null; // Store empty number cell as null
+          finalValue = null; 
         } else {
           const numValue = Number(value);
           if (isNaN(numValue)) {
-            finalValue = null; // If not a valid number, store as null
+            finalValue = null;
           } else {
             finalValue = numValue;
           }
@@ -788,7 +788,7 @@ const AirtableClone = () => {
             } else {
               const numValue = Number(value);
               if (isNaN(numValue)) {
-                value = null; // If invalid, save as null
+                value = null;
               } else {
                 value = numValue;
               }
