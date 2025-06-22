@@ -22,7 +22,7 @@ import { Bars3BottomLeftIcon, HashtagIcon } from "@heroicons/react/24/outline";
 import Image from "next/image";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { type Prisma } from "@prisma/client";
-import { type Base, type Sort } from "~/types";
+import { type Base, type Sort, type Column } from "~/types";
 import { type Filter as FilterType } from "~/server/api/routers/base";
 import FilterComponent from "~/components/FilterComponent";
 
@@ -118,6 +118,12 @@ const AirtableClone = () => {
   const [showSort, setShowSort] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const sortPopupRef = useRef<HTMLDivElement>(null);
+
+  // State for temporary row display
+  const [tempRowIds, setTempRowIds] = useState<Set<string>>(new Set());
+  const [animatingOutRowIds, setAnimatingOutRowIds] = useState<Set<string>>(
+    new Set()
+  );
 
   // Fetch persistent columns and rows from backend
   const { data: base } = trpc.base.getTable.useQuery(
@@ -274,7 +280,6 @@ const AirtableClone = () => {
       ) ?? [],
     [infiniteData]
   );
-
   // Single computed variable that handles all filtering, sorting, and searching
   const processedRows = useMemo(() => {
     if (!allRows.length) return [];
@@ -284,6 +289,9 @@ const AirtableClone = () => {
     // Apply search filter
     if (searchTerm) {
       rows = rows.filter((row) => {
+        // Always show temporary rows during their display period
+        if (tempRowIds.has(row.id)) return true;
+
         return base?.columns?.some((col) => {
           const value = row.data[col.id];
           return (
@@ -297,6 +305,9 @@ const AirtableClone = () => {
     // Apply column filters
     if (allFilters.length > 0) {
       rows = rows.filter((row) => {
+        // Always show temporary rows during their display period
+        if (tempRowIds.has(row.id)) return true;
+
         return allFilters.every((filter) => {
           const columnId = filter.columnId;
           const columnType = filter.columnType;
@@ -338,6 +349,11 @@ const AirtableClone = () => {
     } // Apply sorting
     if (sorts.length > 0) {
       rows = [...rows].sort((a, b) => {
+        // Keep temporary rows at the end during their display period
+        if (tempRowIds.has(a.id) && !tempRowIds.has(b.id)) return 1;
+        if (!tempRowIds.has(a.id) && tempRowIds.has(b.id)) return -1;
+        if (tempRowIds.has(a.id) && tempRowIds.has(b.id)) return 0;
+
         for (const sort of sorts) {
           const { columnId, direction } = sort;
           const aVal = a.data[columnId];
@@ -375,14 +391,13 @@ const AirtableClone = () => {
     }
 
     return rows;
-  }, [allRows, searchTerm, allFilters, sorts, base?.columns]);
+  }, [allRows, searchTerm, allFilters, sorts, base?.columns, tempRowIds]);
 
   type Row = (typeof allRows)[number];
 
   const tableContainerRef = useRef<HTMLDivElement>(null);
-
   const rowVirtualizer = useVirtualizer({
-    count: processedRows.length,
+    count: processedRows.length + 1, // +1 for placeholder row
     estimateSize: () => 40,
     getScrollElement: () => tableContainerRef.current,
     overscan: 10,
@@ -559,6 +574,52 @@ const AirtableClone = () => {
             })),
           };
         });
+
+        // Handle temporary row display logic when filters/sorts are active
+        const hasActiveFiltersOrSorts =
+          allFilters.length > 0 || sorts.length > 0 || searchTerm;
+        if (hasActiveFiltersOrSorts) {
+          // Mark this row as temporary
+          setTempRowIds((prev) => new Set(prev).add(newRow.id));
+
+          // After 1 second, check if the row should be hidden
+          setTimeout(() => {
+            // Check if the new row matches current filters/sorts
+            const shouldBeVisible = checkIfRowMatches(
+              newRow,
+              searchTerm,
+              allFilters,
+              sorts,
+              base?.columns
+            );
+
+            if (!shouldBeVisible) {
+              // Start the animation out
+              setAnimatingOutRowIds((prev) => new Set(prev).add(newRow.id));
+
+              // Remove from temporary rows and animating rows after animation completes
+              setTimeout(() => {
+                setTempRowIds((prev) => {
+                  const newSet = new Set(prev);
+                  newSet.delete(newRow.id);
+                  return newSet;
+                });
+                setAnimatingOutRowIds((prev) => {
+                  const newSet = new Set(prev);
+                  newSet.delete(newRow.id);
+                  return newSet;
+                });
+              }, 300); // Animation duration
+            } else {
+              // Row matches filters, just remove from temp tracking
+              setTempRowIds((prev) => {
+                const newSet = new Set(prev);
+                newSet.delete(newRow.id);
+                return newSet;
+              });
+            }
+          }, 1000); // Show for 1 second
+        }
       }
     },
     onError: (_, __, context) => {
@@ -1015,6 +1076,78 @@ const AirtableClone = () => {
 
     setIsBulkAdding(false);
   };
+  // Helper function to check if a row matches the current filters, sorts, and search
+  const checkIfRowMatches = (
+    row: any, // Using any to match the actual row type from tRPC
+    searchTerm: string,
+    filters: FilterType[],
+    sorts: Sort[],
+    columns?: Column[]
+  ): boolean => {
+    if (!columns) return true;
+
+    // Ensure row.data is properly typed
+    const rowData =
+      row.data && typeof row.data === "object" && !Array.isArray(row.data)
+        ? row.data
+        : {};
+
+    // Apply search filter
+    if (searchTerm) {
+      const matchesSearch = columns.some((col) => {
+        const value = rowData[col.id];
+        return (
+          value &&
+          value.toString().toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      });
+      if (!matchesSearch) return false;
+    }
+
+    // Apply column filters
+    if (filters.length > 0) {
+      const matchesFilters = filters.every((filter) => {
+        const columnId = filter.columnId;
+        const columnType = filter.columnType;
+        const condition = filter.condition;
+        const value = filter.value as unknown;
+        const cellValue = rowData[columnId];
+
+        if (columnType === "TEXT") {
+          const str = String(cellValue ?? "").toLowerCase();
+          const filterVal = String(value ?? "").toLowerCase();
+          if (condition === "contains") return str.includes(filterVal);
+          if (condition === "notContains") return !str.includes(filterVal);
+          if (condition === "equals") return str === filterVal;
+          if (condition === "notEquals") return str !== filterVal;
+          if (condition === "isEmpty") return !str;
+          if (condition === "isNotEmpty") return !!str;
+        } else if (columnType === "NUMBER") {
+          const filterNum = Number(value);
+
+          // If filter value is not a valid number, skip this filter
+          if (isNaN(filterNum)) return true;
+
+          // Convert cell value to number, treat empty/null as 0
+          const cellNum =
+            cellValue === null || cellValue === undefined || cellValue === ""
+              ? 0
+              : Number(cellValue);
+
+          // If cell value is not a valid number, treat as 0
+          const finalCellNum = isNaN(cellNum) ? 0 : cellNum;
+
+          if (condition === "gt") return finalCellNum > filterNum;
+          if (condition === "lt") return finalCellNum < filterNum;
+        }
+
+        return true;
+      });
+      if (!matchesFilters) return false;
+    }
+
+    return true;
+  };
 
   if (session === undefined) {
     // Session is loading
@@ -1465,16 +1598,66 @@ const AirtableClone = () => {
                     position: "relative",
                   }}
                 >
+                  {" "}
                   {rowVirtualizer.getVirtualItems().map((virtualRow) => {
                     const rowIdx = virtualRow.index;
-                    const row = processedRows[rowIdx];
+                    const isPlaceholderRow = rowIdx === processedRows.length;
 
+                    // Handle placeholder row
+                    if (isPlaceholderRow) {
+                      return (
+                        <tr
+                          key="placeholder-row"
+                          className="group flex transition-all duration-300 ease-out hover:bg-gray-50"
+                          style={{
+                            position: "absolute",
+                            top: 0,
+                            left: 0,
+                            width: "max-content",
+                            height: `${virtualRow.size}px`,
+                            transform: `translateY(${virtualRow.start}px)`,
+                          }}
+                        >
+                          <td className="sticky left-0 z-10 flex h-10 w-12 flex-shrink-0 items-center justify-center border-b border-gray-200 bg-white group-hover:bg-gray-50">
+                            <button
+                              onClick={handleAddRow}
+                              disabled={addRow.isLoading}
+                              className="flex h-6 w-6 items-center justify-center rounded text-gray-500 disabled:opacity-50"
+                              title="Add row"
+                              type="button"
+                            >
+                              <Plus className="h-4 w-4" />
+                            </button>
+                          </td>
+                          {base?.columns.map((col, index) => (
+                            <td
+                              key={col.id}
+                              className={`h-10 w-48 flex-shrink-0 border-b border-gray-200 group-hover:bg-gray-50 ${
+                                index === base.columns.length - 1
+                                  ? "border-r"
+                                  : ""
+                              }`}
+                            ></td>
+                          ))}
+                        </tr>
+                      );
+                    }
+
+                    // Handle regular rows
+                    const row = processedRows[rowIdx];
                     if (!row) return null;
+
+                    const isAnimatingOut = animatingOutRowIds.has(row.id);
+                    const isTemporary = tempRowIds.has(row.id);
 
                     return (
                       <tr
                         key={row.id}
-                        className="flex hover:bg-gray-50"
+                        className={`flex transition-all duration-300 hover:bg-gray-50 ${
+                          isAnimatingOut
+                            ? "translate-y-[-20px] transform opacity-0"
+                            : "translate-y-0 transform opacity-100"
+                        } ${isTemporary ? "border-green-200 bg-green-50" : ""}`}
                         style={{
                           position: "absolute",
                           top: 0,
@@ -1543,36 +1726,8 @@ const AirtableClone = () => {
                         })}
                       </tr>
                     );
-                  })}
-                </tbody>{" "}
-                <tfoot>
-                  {" "}
-                  {/* Row Placeholder */}{" "}
-                  <tr
-                    className="group flex hover:bg-gray-600"
-                    style={{ width: "max-content" }}
-                  >
-                    <td className="sticky left-0 z-10 flex h-10 w-12 flex-shrink-0 items-center justify-center border-b border-gray-200 bg-white group-hover:bg-gray-50">
-                      <button
-                        onClick={handleAddRow}
-                        disabled={addRow.isLoading}
-                        className="flex h-6 w-6 items-center justify-center rounded text-gray-500 disabled:opacity-50"
-                        title="Add row"
-                        type="button"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </button>
-                    </td>{" "}
-                    {base?.columns.map((col, index) => (
-                      <td
-                        key={col.id}
-                        className={`h-10 w-48 flex-shrink-0 border-b border-gray-200 group-hover:bg-gray-50 ${
-                          index === base.columns.length - 1 ? "border-r" : ""
-                        }`}
-                      ></td>
-                    ))}
-                  </tr>
-                </tfoot>
+                  })}{" "}
+                </tbody>
               </table>
             </div>
           </div>
