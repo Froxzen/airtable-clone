@@ -13,3 +13,8 @@ export interface Base {
   name: string;
   columns: Column[];
 }
+
+export interface Sort {
+  columnId: string;
+  direction: "asc" | "desc";
+}

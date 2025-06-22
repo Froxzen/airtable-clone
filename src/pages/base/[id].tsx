@@ -21,20 +21,24 @@ import {
   FileText,
   Settings,
   Search,
+  Filter,
   SortAsc,
   Trash2,
+  X,
 } from "lucide-react";
 import { Bars3BottomLeftIcon, HashtagIcon } from "@heroicons/react/24/outline";
 import Image from "next/image";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { type Prisma } from "@prisma/client";
-import { type Base, type Column } from "~/types";
+import { type Base, type Column, type Sort } from "~/types";
 import { type Filter as FilterType } from "~/server/api/routers/base";
 import FilterComponent from "~/components/FilterComponent";
 
 // Define proper types for the data structures
 
 const AirtableClone = () => {
+  const router = useRouter();
+  const baseId = router.query.id as string;
   const [selectedCell, setSelectedCell] = useState<{
     row: number;
     col: number;
@@ -58,22 +62,15 @@ const AirtableClone = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [textFilters, setTextFilters] = useState<FilterType[]>([]);
   const [numberFilters, setNumberFilters] = useState<FilterType[]>([]);
-
   const allFilters = useMemo(
     () => [...textFilters, ...numberFilters],
     [textFilters, numberFilters]
   );
 
-  const [sortConfig, setSortConfig] = useState<{
-    columnId?: string;
-    direction?: "asc" | "desc";
-  }>({});
+  const [sorts, setSorts] = useState<Sort[]>([]);
   const [showSort, setShowSort] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const sortPopupRef = useRef<HTMLDivElement>(null);
-
-  const router = useRouter();
-  const baseId = router.query.id as string;
 
   // Fetch persistent columns and rows from backend
   const { data: base } = trpc.base.getTable.useQuery(
@@ -158,11 +155,10 @@ const AirtableClone = () => {
       ? getBaseColor.replace("-600", "-700")
       : "bg-purple-700";
   }, [getBaseColor]);
-
   const utils = trpc.useUtils();
   const cellUpdateTimeouts = useRef(new Map<string, NodeJS.Timeout>());
 
-  const isSortActive = !!(sortConfig.columnId && sortConfig.direction);
+  const isSortActive = sorts.length > 0;
   const isFilterActive = allFilters.length > 0;
   const isClearActive = isSortActive || isFilterActive;
 
@@ -171,7 +167,6 @@ const AirtableClone = () => {
   const [showAddColumnPopup, setShowAddColumnPopup] = useState(false);
   const addColumnButtonRef = useRef<HTMLButtonElement>(null);
   const addColumnPopupRef = useRef<HTMLDivElement>(null);
-
   const {
     data: infiniteData,
     fetchNextPage,
@@ -184,10 +179,7 @@ const AirtableClone = () => {
       limit: PAGE_SIZE,
       searchTerm,
       filters: allFilters,
-      sortConfig:
-        sortConfig.columnId && sortConfig.direction
-          ? { columnId: sortConfig.columnId, direction: sortConfig.direction }
-          : undefined,
+      sortConfig: sorts,
     },
     {
       enabled: !!baseId,
@@ -301,30 +293,47 @@ const AirtableClone = () => {
           return true;
         });
       });
-    }
-
-    // Apply sorting
-    if (sortConfig.columnId && sortConfig.direction) {
-      const colId = sortConfig.columnId;
+    } // Apply sorting
+    if (sorts.length > 0) {
       rows = [...rows].sort((a, b) => {
-        const aVal = a.data[colId];
-        const bVal = b.data[colId];
-        // Try number sort first, fallback to string
-        const aNum = Number(aVal);
-        const bNum = Number(bVal);
-        if (!isNaN(aNum) && !isNaN(bNum)) {
-          return sortConfig.direction === "asc" ? aNum - bNum : bNum - aNum;
+        for (const sort of sorts) {
+          const { columnId, direction } = sort;
+          const aVal = a.data[columnId];
+          const bVal = b.data[columnId];
+
+          const column = base?.columns.find((c) => c.id === columnId);
+
+          let comparison = 0;
+
+          if (column?.type === "NUMBER") {
+            const aNum =
+              aVal === null || aVal === undefined || aVal === ""
+                ? -Infinity
+                : Number(aVal);
+            const bNum =
+              bVal === null || bVal === undefined || bVal === ""
+                ? -Infinity
+                : Number(bVal);
+            if (!isNaN(aNum) && !isNaN(bNum)) {
+              comparison = aNum - bNum;
+            }
+          } else {
+            const aStr = (aVal ?? "").toString().toLowerCase();
+            const bStr = (bVal ?? "").toString().toLowerCase();
+            if (aStr < bStr) comparison = -1;
+            if (aStr > bStr) comparison = 1;
+          }
+
+          if (comparison !== 0) {
+            return direction === "asc" ? comparison : -comparison;
+          }
         }
-        const aStr = (aVal ?? "").toString().toLowerCase();
-        const bStr = (bVal ?? "").toString().toLowerCase();
-        if (aStr < bStr) return sortConfig.direction === "asc" ? -1 : 1;
-        if (aStr > bStr) return sortConfig.direction === "asc" ? 1 : -1;
         return 0;
       });
     }
 
     return rows;
-  }, [allRows, searchTerm, allFilters, sortConfig, base?.columns]);
+  }, [allRows, searchTerm, allFilters, sorts, base?.columns]);
 
   type Row = (typeof allRows)[number];
 
@@ -434,7 +443,6 @@ const AirtableClone = () => {
       }
     },
   });
-
   const addRow = trpc.base.addRow.useMutation({
     onMutate: async ({ data }) => {
       const queryKey = {
@@ -442,10 +450,7 @@ const AirtableClone = () => {
         limit: PAGE_SIZE,
         searchTerm,
         filters: allFilters,
-        sortConfig:
-          sortConfig.columnId && sortConfig.direction
-            ? { columnId: sortConfig.columnId, direction: sortConfig.direction }
-            : undefined,
+        sortConfig: sorts,
       };
       await utils.base.getRowsInfinite.cancel(queryKey);
       const previousData = utils.base.getRowsInfinite.getInfiniteData(queryKey);
@@ -488,13 +493,7 @@ const AirtableClone = () => {
           limit: PAGE_SIZE,
           searchTerm,
           filters: allFilters,
-          sortConfig:
-            sortConfig.columnId && sortConfig.direction
-              ? {
-                  columnId: sortConfig.columnId,
-                  direction: sortConfig.direction,
-                }
-              : undefined,
+          sortConfig: sorts,
         };
         utils.base.getRowsInfinite.setInfiniteData(queryKey, (old) => {
           if (!old) return old;
@@ -527,13 +526,7 @@ const AirtableClone = () => {
           limit: PAGE_SIZE,
           searchTerm,
           filters: allFilters,
-          sortConfig:
-            sortConfig.columnId && sortConfig.direction
-              ? {
-                  columnId: sortConfig.columnId,
-                  direction: sortConfig.direction,
-                }
-              : undefined,
+          sortConfig: sorts,
         };
         utils.base.getRowsInfinite.setInfiniteData(
           queryKey,
@@ -549,10 +542,7 @@ const AirtableClone = () => {
         limit: PAGE_SIZE,
         searchTerm,
         filters: allFilters,
-        sortConfig:
-          sortConfig.columnId && sortConfig.direction
-            ? { columnId: sortConfig.columnId, direction: sortConfig.direction }
-            : undefined,
+        sortConfig: sorts,
       };
       await utils.base.getRowsInfinite.cancel(queryKey);
       const previousData = utils.base.getRowsInfinite.getInfiniteData(queryKey);
@@ -580,10 +570,7 @@ const AirtableClone = () => {
         limit: PAGE_SIZE,
         searchTerm,
         filters: allFilters,
-        sortConfig:
-          sortConfig.columnId && sortConfig.direction
-            ? { columnId: sortConfig.columnId, direction: sortConfig.direction }
-            : undefined,
+        sortConfig: sorts,
       };
       utils.base.getRowsInfinite.setInfiniteData(queryKey, (oldData) => {
         if (!oldData) return oldData;
@@ -614,10 +601,7 @@ const AirtableClone = () => {
         limit: PAGE_SIZE,
         searchTerm,
         filters: allFilters,
-        sortConfig:
-          sortConfig.columnId && sortConfig.direction
-            ? { columnId: sortConfig.columnId, direction: sortConfig.direction }
-            : undefined,
+        sortConfig: sorts,
       };
       if (context?.previousData) {
         utils.base.getRowsInfinite.setInfiniteData(
@@ -847,7 +831,7 @@ const AirtableClone = () => {
 
     const row = allRows[currentRow];
     if (row && !row.id.startsWith("temp-row-")) {
-      const col = base.columns[currentCol];
+      const col = base.columns[currentRow];
       if (col) {
         const key = `${row.id}-${col.id}`;
 
@@ -1088,44 +1072,119 @@ const AirtableClone = () => {
           >
             <SortAsc className="h-4 w-4" />
             Sort
-          </button>
+          </button>{" "}
           {/* Sort Popup */}
           {showSort && (
             <div
               ref={sortPopupRef}
-              className="absolute left-0 top-full z-30 mt-2 w-64 max-w-xs rounded border bg-white p-4 shadow-lg"
+              className="absolute left-0 top-full z-30 mt-2 w-[500px] max-w-lg rounded border bg-white p-4 shadow-lg"
             >
-              <div className="mb-2 text-xs font-semibold text-gray-700">
-                Sort by
+              <div className="mb-4 text-sm text-gray-500">
+                Sort records in this view
               </div>
-              <select
-                className="mb-2 w-full rounded border px-2 py-1 text-xs"
-                value={sortConfig.columnId || ""}
-                onChange={(e) =>
-                  setSortConfig((s) => ({ ...s, columnId: e.target.value }))
-                }
-              >
-                <option value="">Select column</option>
-                {base?.columns.map((col) => (
-                  <option key={col.id} value={col.id}>
-                    {col.name}
-                  </option>
+              <div className="space-y-2">
+                {sorts.map((sort, index) => (
+                  <div
+                    key={index}
+                    className="grid grid-cols-[auto_1fr_1fr_auto] items-center gap-2"
+                  >
+                    <span className="text-sm text-gray-500">
+                      {index === 0 ? "Sort by" : "Then by"}
+                    </span>
+                    <select
+                      className="rounded border border-gray-300 bg-white px-2 py-1 text-sm shadow-sm focus:border-purple-500 focus:ring-purple-500"
+                      value={sort.columnId}
+                      onChange={(e) =>
+                        setSorts((prev) =>
+                          prev.map((s, i) =>
+                            i === index ? { ...s, columnId: e.target.value } : s
+                          )
+                        )
+                      }
+                    >
+                      <option value="">Select a column</option>
+                      {base?.columns.map((col) => (
+                        <option key={col.id} value={col.id}>
+                          {col.name}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      className="rounded border border-gray-300 bg-white px-2 py-1 text-sm shadow-sm focus:border-purple-500 focus:ring-purple-500"
+                      value={sort.direction}
+                      onChange={(e) =>
+                        setSorts((prev) =>
+                          prev.map((s, i) =>
+                            i === index
+                              ? {
+                                  ...s,
+                                  direction: e.target.value as "asc" | "desc",
+                                }
+                              : s
+                          )
+                        )
+                      }
+                    >
+                      <option value="">Select an order</option>
+                      <option value="asc">Ascending</option>
+                      <option value="desc">Descending</option>
+                    </select>
+                    <button
+                      onClick={() =>
+                        setSorts((prev) => prev.filter((_, i) => i !== index))
+                      }
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
                 ))}
-              </select>
-              <select
-                className="mb-2 w-full rounded border px-2 py-1 text-xs"
-                value={sortConfig.direction || ""}
-                onChange={(e) =>
-                  setSortConfig((s) => ({
-                    ...s,
-                    direction: e.target.value as "asc" | "desc",
-                  }))
-                }
-              >
-                <option value="">Select order</option>
-                <option value="asc">Ascending</option>
-                <option value="desc">Descending</option>
-              </select>
+                {sorts.length === 0 && (
+                  <div className="grid grid-cols-[auto_1fr_1fr_auto] items-center gap-2">
+                    <span className="text-sm text-gray-500">Sort by</span>
+                    <select
+                      className="rounded border border-gray-300 bg-white px-2 py-1 text-sm shadow-sm focus:border-purple-500 focus:ring-purple-500"
+                      value=""
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          setSorts([
+                            { columnId: e.target.value, direction: "asc" },
+                          ]);
+                        }
+                      }}
+                    >
+                      <option value="">Select a column</option>
+                      {base?.columns.map((col) => (
+                        <option key={col.id} value={col.id}>
+                          {col.name}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      className="rounded border border-gray-300 bg-white px-2 py-1 text-sm shadow-sm focus:border-purple-500 focus:ring-purple-500"
+                      disabled
+                    >
+                      <option value="">Select an order</option>
+                      <option value="asc">Ascending</option>
+                      <option value="desc">Descending</option>
+                    </select>
+                    <div className="w-4"></div>
+                  </div>
+                )}
+                {sorts.length > 0 && sorts.length < 3 && (
+                  <button
+                    onClick={() =>
+                      setSorts((prev) => [
+                        ...prev,
+                        { columnId: "", direction: "asc" },
+                      ])
+                    }
+                    className="text-sm text-purple-600 hover:text-purple-700"
+                  >
+                    + Add another sort
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -1159,7 +1218,7 @@ const AirtableClone = () => {
           }`}
           disabled={!isClearActive}
           onClick={() => {
-            setSortConfig({});
+            setSorts([]);
             setTextFilters([]);
             setNumberFilters([]);
             setShowSort(false);

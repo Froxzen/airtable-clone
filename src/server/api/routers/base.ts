@@ -13,6 +13,11 @@ const filterSchema = z.object({
   value: z.any().optional(),
 });
 
+const sortSchema = z.object({
+  columnId: z.string(),
+  direction: z.enum(["asc", "desc"]),
+});
+
 export type Filter = z.infer<typeof filterSchema>;
 
 export const baseRouter = createTRPCRouter({
@@ -170,9 +175,7 @@ export const baseRouter = createTRPCRouter({
         cursor: z.string().nullish(), // cursor can be a string or null
         searchTerm: z.string().optional(),
         filters: z.array(filterSchema).optional(),
-        sortConfig: z
-          .object({ columnId: z.string(), direction: z.enum(["asc", "desc"]) })
-          .optional(),
+        sortConfig: z.array(sortSchema).optional(),
       })
     )
     .query(async ({ ctx, input }) => {
@@ -275,22 +278,21 @@ export const baseRouter = createTRPCRouter({
           whereConditions.push({ AND: filterConditions });
         }
       }
-
       if (whereConditions.length > 0) {
         where.AND = whereConditions;
       }
 
       // Handle sorting
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let orderBy: any = { id: "asc" };
-      if (sortConfig?.columnId && sortConfig?.direction) {
-        orderBy = {
+      let orderBy: any = [{ id: "asc" }];
+      if (sortConfig && sortConfig.length > 0) {
+        orderBy = sortConfig.map((sort) => ({
           data: {
-            path: [sortConfig.columnId],
-            sort: sortConfig.direction,
+            path: [sort.columnId],
+            sort: sort.direction,
             nulls: "last",
           },
-        };
+        }));
       }
 
       const rows = await ctx.prisma.row.findMany({
