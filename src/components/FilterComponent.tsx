@@ -133,7 +133,9 @@ const FilterComponent: React.FC<FilterProps> = ({
                     ...filter,
                     condition: e.target.value,
                     value:
-                      filter.columnType === "NUMBER" ? filter.value || "0" : "",
+                      filter.columnType === "NUMBER"
+                        ? (filter.value as string) || "0"
+                        : "",
                   })
                 }
                 className="rounded border border-gray-300 bg-white px-2 py-1 text-sm shadow-sm focus:border-purple-500 focus:ring-purple-500"
@@ -153,7 +155,7 @@ const FilterComponent: React.FC<FilterProps> = ({
                   filter.condition !== "isNotEmpty" && (
                     <input
                       type={filter.columnType === "NUMBER" ? "number" : "text"}
-                      value={filter.value}
+                      value={String(filter.value ?? "")}
                       onChange={(e) =>
                         onUpdateFilter({ ...filter, value: e.target.value })
                       }

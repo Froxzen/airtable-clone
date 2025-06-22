@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { faker } from "@faker-js/faker";
-import { ColumnType, Prisma } from "@prisma/client";
+import { ColumnType, type Prisma } from "@prisma/client";
 
 const tableRowSchema = z.record(z.string());
 
@@ -183,12 +183,10 @@ export const baseRouter = createTRPCRouter({
 
       const where: Prisma.RowWhereInput = { baseId };
       const whereConditions: Prisma.RowWhereInput[] = [];
-
       const columns = await ctx.prisma.column.findMany({
         where: { baseId: input.baseId },
         select: { id: true, type: true },
       });
-      const columnMap = new Map(columns.map((c) => [c.id, c]));
 
       // Handle search term
       if (searchTerm) {
@@ -210,7 +208,10 @@ export const baseRouter = createTRPCRouter({
       if (filters && filters.length > 0) {
         const filterConditions = filters
           .map((filter) => {
-            const { columnId, columnType, condition, value } = filter;
+            const columnId = filter.columnId;
+            const columnType = filter.columnType;
+            const condition = filter.condition;
+            const value = filter.value;
 
             if (columnType === "TEXT") {
               const strValue = String(value ?? "");

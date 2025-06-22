@@ -1,12 +1,5 @@
-import React, {
-  useState,
-  useRef,
-  useEffect,
-  useMemo,
-  useCallback,
-} from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { trpc } from "~/utils/api";
-import { useInView } from "react-intersection-observer";
 import { useRouter } from "next/router";
 import { useSession, signOut } from "next-auth/react";
 import {
@@ -21,7 +14,6 @@ import {
   FileText,
   Settings,
   Search,
-  Filter,
   SortAsc,
   Trash2,
   X,
@@ -30,7 +22,7 @@ import { Bars3BottomLeftIcon, HashtagIcon } from "@heroicons/react/24/outline";
 import Image from "next/image";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { type Prisma } from "@prisma/client";
-import { type Base, type Column, type Sort } from "~/types";
+import { type Base, type Sort } from "~/types";
 import { type Filter as FilterType } from "~/server/api/routers/base";
 import FilterComponent from "~/components/FilterComponent";
 
@@ -145,16 +137,9 @@ const AirtableClone = () => {
       }
       return Math.abs(hash);
     }
-
     return colors[hashString(base.id) % colors.length];
   }, [base?.id]);
 
-  // Get darker variant for secondary header
-  const getBaseColorDark = useMemo(() => {
-    return getBaseColor
-      ? getBaseColor.replace("-600", "-700")
-      : "bg-purple-700";
-  }, [getBaseColor]);
   const utils = trpc.useUtils();
   const cellUpdateTimeouts = useRef(new Map<string, NodeJS.Timeout>());
 
@@ -172,7 +157,6 @@ const AirtableClone = () => {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-    isLoading,
   } = trpc.base.getRowsInfinite.useInfiniteQuery(
     {
       baseId,
@@ -259,12 +243,15 @@ const AirtableClone = () => {
     if (allFilters.length > 0) {
       rows = rows.filter((row) => {
         return allFilters.every((filter) => {
-          const { columnId, columnType, condition, value } = filter;
+          const columnId = filter.columnId;
+          const columnType = filter.columnType;
+          const condition = filter.condition;
+          const value = filter.value;
           const cellValue = row.data[columnId];
 
           if (columnType === "TEXT") {
-            const str = (cellValue ?? "").toString().toLowerCase();
-            const filterVal = (value ?? "").toString().toLowerCase();
+            const str = String(cellValue ?? "").toLowerCase();
+            const filterVal = String(value ?? "").toLowerCase();
             if (condition === "contains") return str.includes(filterVal);
             if (condition === "notContains") return !str.includes(filterVal);
             if (condition === "equals") return str === filterVal;
