@@ -1095,7 +1095,7 @@ const AirtableClone = () => {
 
     addManyRows({
       baseId,
-      count: 1000,
+      count: 100000,
     });
   };
 
@@ -1268,7 +1268,7 @@ const AirtableClone = () => {
           ) : (
             <>
               <Plus className="h-4 w-4" />
-              <span>Add 100 rows</span>
+              <span>Add 100k rows</span>
             </>
           )}
         </button>
