@@ -161,9 +161,8 @@ export const baseRouter = createTRPCRouter({
       if (columns.length === 0) {
         return { rows: [] };
       }
-
       const rowsData = Array.from({ length: count }).map(() => {
-        const row: Record<string, any> = {};
+        const row: Record<string, string | number> = {};
         columns.forEach((col) => {
           if (col.type === "TEXT") {
             row[col.id] = faker.person.fullName();

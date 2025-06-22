@@ -44,9 +44,6 @@ const AirtableClone = () => {
   const [newColumnName, setNewColumnName] = useState("");
   const [editingColumnName, setEditingColumnName] = useState("");
 
-  const [isBulkAdding, setIsBulkAdding] = useState(false);
-  const [pendingBatches, setPendingBatches] = useState(0);
-
   const { data: session } = useSession();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
 
@@ -222,7 +219,6 @@ const AirtableClone = () => {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-    refetch,
   } = trpc.base.getRowsInfinite.useInfiniteQuery(
     {
       baseId,
@@ -1042,8 +1038,6 @@ const AirtableClone = () => {
     });
   };
 
-  const [isAdding, setIsAdding] = useState(false);
-
   const { mutate: addManyRows, isLoading: isAddingManyRows } =
     trpc.base.addManyRows.useMutation({
       onSuccess: (data) => {
@@ -1102,25 +1096,36 @@ const AirtableClone = () => {
       },
     });
   const handleAddManyRows = async () => {
-    if (!base || isAddingManyRows) return; // Add 5k rows 20 times for optimal progressive loading
-    for (let i = 0; i < 20; i++) {
-      await new Promise<void>((resolve) => {
-        addManyRows(
-          {
-            baseId,
-            count: 5000,
-          },
-          {
-            onSuccess: () => {
-              resolve();
+    if (!base || isAddingManyRows) return;
+
+    try {
+      // Add 5k rows 20 times for optimal progressive loading
+      for (let i = 0; i < 20; i++) {
+        await new Promise<void>((resolve, reject) => {
+          addManyRows(
+            {
+              baseId,
+              count: 5000,
             },
-            onError: () => {
-              resolve(); // Continue even if one batch fails
-            },
-          }
-        );
-      });
+            {
+              onSuccess: () => {
+                resolve();
+              },
+              onError: (error) => {
+                console.error(`Failed to add batch ${i + 1}:`, error);
+                reject(error);
+              },
+            }
+          );
+        });
+      }
+    } catch (error) {
+      console.error("Failed to add rows:", error);
     }
+  };
+
+  const handleAddManyRowsWrapper = () => {
+    void handleAddManyRows();
   };
 
   // Helper function to check if a row matches the current filters, sorts, and search
@@ -1276,8 +1281,9 @@ const AirtableClone = () => {
       </div>
       {/* Controls Bar: Sort, Filter, Search */}
       <div className="flex items-center gap-4 border-b border-gray-200 bg-purple-50 px-4 py-3">
+        {" "}
         <button
-          onClick={handleAddManyRows}
+          onClick={handleAddManyRowsWrapper}
           disabled={isAddingManyRows}
           className="flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-gray-600 shadow hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
         >
@@ -1294,13 +1300,14 @@ const AirtableClone = () => {
           )}
         </button>
         <div className="relative inline-block">
+          {" "}
           <button
             ref={sortButtonRef}
             onClick={() => setShowSort(!showSort)}
             className={`flex items-center gap-1 rounded px-3 py-1 text-sm font-medium shadow ${
               isSortActive
                 ? "bg-white text-gray-700"
-                : "text-gray-600 hover:bg-gray-100"
+                : "bg-white text-gray-600 hover:bg-gray-100"
             }`}
             type="button"
           >
