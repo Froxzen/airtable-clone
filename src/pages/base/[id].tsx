@@ -1315,8 +1315,12 @@ const AirtableClone = () => {
             tabIndex={0}
             onKeyDown={editingCell ? undefined : handleKeyDown}
           >
+            {" "}
             {/* Vertically scrolling container */}
-            <div ref={tableContainerRef} className="h-full overflow-y-auto">
+            <div
+              ref={tableContainerRef}
+              className="h-full max-h-[calc(100vh-200px)] overflow-y-auto"
+            >
               <table className="w-full min-w-max table-auto border-separate border-spacing-0">
                 {/* Table Header */}
                 <thead>
