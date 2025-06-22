@@ -43,6 +43,9 @@ const AirtableClone = () => {
   const [newColumnName, setNewColumnName] = useState("");
   const [editingColumnName, setEditingColumnName] = useState("");
 
+  const [isBulkAdding, setIsBulkAdding] = useState(false);
+  const [pendingBatches, setPendingBatches] = useState(0);
+
   const { data: session } = useSession();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
 
@@ -208,8 +211,7 @@ const AirtableClone = () => {
   const isFilterActive = allFilters.length > 0;
   const isClearActive = isSortActive || isFilterActive;
 
-  const [isBulkAdding, setIsBulkAdding] = useState(false);
-  const PAGE_SIZE = isBulkAdding ? 500 : 250; // Larger page size during bulk operations
+  const PAGE_SIZE = 500;
   const [showAddColumnPopup, setShowAddColumnPopup] = useState(false);
   const addColumnButtonRef = useRef<HTMLButtonElement>(null);
   const addColumnPopupRef = useRef<HTMLDivElement>(null);
@@ -218,13 +220,14 @@ const AirtableClone = () => {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
+    refetch,
   } = trpc.base.getRowsInfinite.useInfiniteQuery(
     {
       baseId,
       limit: PAGE_SIZE,
-      searchTerm: isBulkAdding ? undefined : searchTerm,
-      filters: isBulkAdding ? undefined : allFilters,
-      sortConfig: isBulkAdding ? undefined : sorts,
+      searchTerm,
+      filters: allFilters,
+      sortConfig: sorts,
     },
     {
       enabled: !!baseId,
@@ -426,16 +429,12 @@ const AirtableClone = () => {
     fetchNextPage,
   ]);
 
-  // Optimized mutations with proper cache updates
   const addColumn = trpc.base.addColumn.useMutation({
     onMutate: async ({ name, order }) => {
-      // Cancel outgoing refetches
       await utils.base.getTable.cancel({ baseId });
 
-      // Snapshot previous value
       const previousData = utils.base.getTable.getData({ baseId });
 
-      // Optimistically update cache
       const tempId = `temp-col-${Date.now()}`;
       utils.base.getTable.setData({ baseId }, (old) =>
         old
@@ -818,8 +817,6 @@ const AirtableClone = () => {
       let finalValue: string | number | null = value;
 
       if (col?.type === "NUMBER") {
-        // User might still be typing a valid number (e.g., "12.", "-")
-        // We don't want to save these intermediate states.
         if (value.endsWith(".") || value === "-") {
           return;
         }
@@ -1031,54 +1028,102 @@ const AirtableClone = () => {
       void router.push("/");
     });
   };
-  const addManyRows = trpc.base.addManyRows.useMutation({
-    // Invalidation will be handled manually after all batches are complete
+
+  const [isAdding, setIsAdding] = useState(false);
+
+  const { mutateAsync: addManyRows } = trpc.base.addManyRows.useMutation({
+    onSuccess: (data) => {
+      const newRows = data.rows.map((row) => ({
+        ...row,
+        data:
+          row.data && typeof row.data === "object" && !Array.isArray(row.data)
+            ? row.data
+            : {},
+      }));
+
+      const queryKey = {
+        baseId,
+        limit: PAGE_SIZE,
+        searchTerm,
+        filters: allFilters,
+        sortConfig: sorts,
+      };
+
+      utils.base.getRowsInfinite.setInfiniteData(queryKey, (old) => {
+        if (!old) {
+          return {
+            pages: [{ rows: newRows, nextCursor: undefined }],
+            pageParams: [undefined],
+          };
+        }
+
+        const newPages = [...old.pages];
+        const lastPage = newPages[newPages.length - 1];
+
+        if (lastPage) {
+          newPages[newPages.length - 1] = {
+            ...lastPage,
+            rows: [...lastPage.rows, ...newRows],
+          };
+        } else {
+          newPages.push({ rows: newRows, nextCursor: undefined });
+        }
+
+        return {
+          ...old,
+          pages: newPages,
+        };
+      });
+    },
+    onError: (error) => {
+      console.error("Failed to add rows:", error);
+    },
   });
 
   const handleAddManyRows = async () => {
-    if (!base) return;
+    if (!base || isAdding) return;
 
-    setIsBulkAdding(true);
+    setIsAdding(true);
+    const originalRowCount = allRows.length;
 
     const emptyData = Object.fromEntries(
       base.columns.map((col) => [col.id, ""])
     );
     const totalRows = 100;
-    const BATCH_SIZE = 1250;
+    const BATCH_SIZE = 25;
 
     const batches = [];
     for (let i = 0; i < totalRows; i += BATCH_SIZE) {
-      const batch = Array.from(
-        { length: Math.min(BATCH_SIZE, totalRows - i) },
-        () => emptyData
-      );
-      batches.push(batch);
+      const batchData = Array(BATCH_SIZE).fill({ data: emptyData });
+      batches.push(batchData);
     }
 
-    const CONCURRENT_BATCHES = 4;
-    for (let i = 0; i < batches.length; i += CONCURRENT_BATCHES) {
-      const currentBatches = batches.slice(i, i + CONCURRENT_BATCHES);
-
+    try {
       await Promise.all(
-        currentBatches.map((batch) =>
-          addManyRows.mutateAsync({ baseId, rows: batch })
+        batches.map((batch) =>
+          addManyRows({
+            baseId,
+            rows: batch,
+          })
         )
       );
+    } catch (error) {
+      console.error("Error adding rows in parallel", error);
+    } finally {
+      setIsAdding(false);
     }
 
-    // Reset to clean state first (no filters/sorts) for fastest loading
-    // This will use the fast path in the backend
-    await utils.base.getRowsInfinite.reset({
-      baseId,
-      limit: PAGE_SIZE,
-      // Don't pass any filters, sorts, or search terms for fastest reset
-    });
-
-    setIsBulkAdding(false);
+    // After all batches are done, scroll to the new rows
+    setTimeout(() => {
+      rowVirtualizer.scrollToIndex(originalRowCount, {
+        align: "start",
+      });
+    }, 100);
   };
+
   // Helper function to check if a row matches the current filters, sorts, and search
   const checkIfRowMatches = (
-    row: any, // Using any to match the actual row type from tRPC
+    row: any,
     searchTerm: string,
     filters: FilterType[],
     sorts: Sort[],
@@ -1086,7 +1131,6 @@ const AirtableClone = () => {
   ): boolean => {
     if (!columns) return true;
 
-    // Ensure row.data is properly typed
     const rowData =
       row.data && typeof row.data === "object" && !Array.isArray(row.data)
         ? row.data
@@ -1237,11 +1281,10 @@ const AirtableClone = () => {
           onClick={() => {
             void handleAddManyRows();
           }}
-          disabled={isBulkAdding}
-          className="flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-gray-600 shadow hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-gray-600 shadow hover:bg-gray-100"
         >
           <Plus className="h-4 w-4" />
-          <span>{isBulkAdding ? "Adding..." : "Add 100k rows"}</span>
+          <span>Add 100k rows</span>
         </button>
         <div className="relative inline-block">
           <button

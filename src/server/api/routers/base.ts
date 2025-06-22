@@ -151,13 +151,17 @@ export const baseRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      await ctx.prisma.row.createMany({
-        data: input.rows.map((data) => ({
-          baseId: input.baseId,
-          data,
-        })),
-      });
-      return { success: true };
+      const createdRows = await ctx.prisma.$transaction(
+        input.rows.map((rowData) =>
+          ctx.prisma.row.create({
+            data: {
+              baseId: input.baseId,
+              data: rowData,
+            },
+          })
+        )
+      );
+      return { rows: createdRows };
     }),
   getRowsInfinite: protectedProcedure
     .input(
@@ -308,7 +312,7 @@ export const baseRouter = createTRPCRouter({
       }
 
       // Handle sorting
-      const orderBy: Prisma.RowOrderByWithRelationInput[] = [{ id: "asc" }]; 
+      const orderBy: Prisma.RowOrderByWithRelationInput[] = [{ id: "asc" }];
       const fetchLimit = Math.min(limit * 10, 5000); // Fetch at most 5000 rows for sorting
 
       const rows = await ctx.prisma.row.findMany({
