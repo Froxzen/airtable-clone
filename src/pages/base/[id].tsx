@@ -1477,14 +1477,14 @@ const AirtableClone = () => {
                       </tr>
                     );
                   })}
-                </tbody>
+                </tbody>{" "}
                 <tfoot>
                   {/* Row Placeholder */}
                   <tr
                     className="flex hover:bg-gray-100"
                     style={{ width: "max-content" }}
                   >
-                    <td className="sticky left-0 z-10 flex h-10 w-12 flex-shrink-0 items-center justify-center border-b border-l border-r border-gray-200 bg-white">
+                    <td className="sticky left-0 z-10 flex h-10 w-12 flex-shrink-0 items-center justify-center border-b border-gray-200 bg-white">
                       <button
                         onClick={handleAddRow}
                         disabled={addRow.isLoading}
@@ -1495,10 +1495,12 @@ const AirtableClone = () => {
                         <Plus className="h-4 w-4" />
                       </button>
                     </td>
-                    {base?.columns.map((col) => (
+                    {base?.columns.map((col, index) => (
                       <td
                         key={col.id}
-                        className="h-10 w-48 flex-shrink-0 border-b border-r border-gray-200"
+                        className={`h-10 w-48 flex-shrink-0 border-b border-gray-200 ${
+                          index === base.columns.length - 1 ? "border-r" : ""
+                        }`}
                       ></td>
                     ))}
                   </tr>
