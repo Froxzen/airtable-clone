@@ -88,7 +88,7 @@ const FilterComponent: React.FC<FilterProps> = ({
       {isOpen && (
         <div
           ref={popupRef}
-          className="absolute left-0 top-full z-10 mt-2 w-[500px] max-w-lg rounded border bg-white p-4 shadow-lg"
+          className="absolute left-0 top-full z-30 mt-2 w-[500px] max-w-lg rounded border bg-white p-4 shadow-lg"
         >
           <div className="mb-4 text-sm text-gray-500">
             In this view, show records
@@ -100,7 +100,6 @@ const FilterComponent: React.FC<FilterProps> = ({
               className="mb-2 grid grid-cols-[auto_1fr_1fr_1fr_auto] items-center gap-2"
             >
               <span className="text-sm text-gray-500">Where</span>
-
               {/* Column Selector */}
               <select
                 value={filter.columnId}
@@ -125,14 +124,16 @@ const FilterComponent: React.FC<FilterProps> = ({
                     {col.name}
                   </option>
                 ))}
-              </select>              {/* Condition Selector */}
+              </select>{" "}
+              {/* Condition Selector */}
               <select
                 value={filter.condition}
                 onChange={(e) =>
                   onUpdateFilter({
                     ...filter,
                     condition: e.target.value,
-                    value: filter.columnType === "NUMBER" ? (filter.value || "0") : "",
+                    value:
+                      filter.columnType === "NUMBER" ? filter.value || "0" : "",
                   })
                 }
                 className="rounded border border-gray-300 bg-white px-2 py-1 text-sm shadow-sm focus:border-purple-500 focus:ring-purple-500"
@@ -146,7 +147,6 @@ const FilterComponent: React.FC<FilterProps> = ({
                   </option>
                 ))}
               </select>
-
               {/* Value Input */}
               <div className="relative">
                 {filter.condition !== "isEmpty" &&
@@ -162,7 +162,6 @@ const FilterComponent: React.FC<FilterProps> = ({
                     />
                   )}
               </div>
-
               <button
                 onClick={() => onRemoveFilter(filter.id)}
                 className="text-gray-400 hover:text-gray-600"

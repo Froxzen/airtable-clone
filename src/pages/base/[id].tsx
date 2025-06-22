@@ -21,7 +21,6 @@ import {
   FileText,
   Settings,
   Search,
-  Filter,
   SortAsc,
   Trash2,
 } from "lucide-react";
@@ -1037,8 +1036,8 @@ const AirtableClone = () => {
                   width={32}
                   height={32}
                   className="h-8 w-8 rounded-full border-2 border-white shadow"
-                />{" "}
-              </button>{" "}
+                />
+              </button>
               {/* Profile Menu Popup */}
               {showProfileMenu && (
                 <div className="absolute right-0 z-50 mt-2 w-40 rounded bg-white py-2 shadow-lg">
@@ -1051,8 +1050,8 @@ const AirtableClone = () => {
                 </div>
               )}
             </div>
-          )}{" "}
-        </div>{" "}
+          )}
+        </div>
       </div>
       {/* Secondary Header / Actions */}
       <div
@@ -1064,7 +1063,7 @@ const AirtableClone = () => {
           <div className="flex items-center space-x-1">
             <span>Table 1</span>
           </div>
-        </div>{" "}
+        </div>
       </div>
       {/* Controls Bar: Sort, Filter, Search */}
       <div className="flex items-center gap-4 border-b border-gray-200 bg-purple-50 px-4 py-3">
@@ -1079,7 +1078,6 @@ const AirtableClone = () => {
           <span>{isBulkAdding ? "Adding..." : "Add 10k rows"}</span>
         </button>
         <div className="relative inline-block">
-          {" "}
           <button
             className="flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-gray-600 shadow hover:bg-gray-100"
             onClick={() => {
@@ -1088,13 +1086,13 @@ const AirtableClone = () => {
             type="button"
           >
             <SortAsc className="h-4 w-4" />
-            Sort{" "}
-          </button>{" "}
+            Sort
+          </button>
           {/* Sort Popup */}
           {showSort && (
             <div
               ref={sortPopupRef}
-              className="absolute left-0 top-full z-10 mt-2 w-64 max-w-xs rounded border bg-white p-4 shadow-lg"
+              className="absolute left-0 top-full z-30 mt-2 w-64 max-w-xs rounded border bg-white p-4 shadow-lg"
             >
               <div className="mb-2 text-xs font-semibold text-gray-700">
                 Sort by
@@ -1181,12 +1179,11 @@ const AirtableClone = () => {
           <span className="absolute right-2 top-2 text-gray-400">
             <Search className="h-4 w-4" />
           </span>
-        </div>{" "}
-      </div>{" "}
+        </div>
+      </div>
       <div className="flex flex-1">
         {/* Left Sidebar: Views & Create */}
         <div className="w-64 flex-shrink-0 border-r border-gray-200 bg-gray-50 p-3">
-          {" "}
           {/* Views Section */}
           <div className="mb-16">
             <div className="relative mb-3">
@@ -1215,8 +1212,8 @@ const AirtableClone = () => {
                   <Plus className="h-3 w-3" />
                 </div>
               ))}
-            </div>{" "}
-          </div>{" "}
+            </div>
+          </div>
           {/* Create Section */}
           <div>
             <div className="mb-3 flex items-center justify-between">
@@ -1263,216 +1260,200 @@ const AirtableClone = () => {
           </div>
         </div>
         {/* Main Content: Table Grid */}
-        <div className="flex flex-1 flex-col">
-          {/* Scrollable Table Container */}
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* Horizontally scrolling container */}
           <div
-            ref={tableContainerRef}
-            className="flex-1 overflow-auto"
-            style={{
-              maxHeight: "calc(100vh - 200px)",
-            }}
+            ref={wrapperRef}
+            className="flex-1 overflow-x-auto focus:outline-none"
+            tabIndex={0}
+            onKeyDown={editingCell ? undefined : handleKeyDown}
           >
-            <div
-              ref={wrapperRef}
-              className="overflow-x-auto focus:outline-none"
-              tabIndex={0}
-              onKeyDown={editingCell ? undefined : handleKeyDown}
-            >
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-max table-auto">
-                  {/* Table Header */}
-                  <thead>
-                    {" "}
-                    <tr className="flex">
-                      <th className="flex h-10 w-12 flex-shrink-0 items-center justify-center border-b border-r border-gray-200 bg-gray-50 text-center text-xs font-medium text-gray-500">
-                        #
-                      </th>{" "}
-                      {base?.columns?.map((col) => (
-                        <th
-                          key={col.id}
-                          className="relative h-10 w-48 flex-shrink-0 border-b border-r border-gray-200 bg-gray-50 px-3 text-left text-xs font-medium text-gray-700"
-                        >
-                          <div className="flex h-full items-center space-x-2">
-                            {col.type === "TEXT" ? (
-                              <Bars3BottomLeftIcon className="h-4 w-4 flex-shrink-0 text-gray-500" />
-                            ) : (
-                              <HashtagIcon className="h-4 w-4 flex-shrink-0 text-gray-500" />
-                            )}
-                            <div className="flex flex-1 items-center">
-                              {editingColumn === col.id ? (
-                                <input
-                                  autoFocus
-                                  className="w-full rounded border border-blue-500 bg-white px-2 py-1 text-xs"
-                                  value={editingColumnName}
-                                  onChange={(e) =>
-                                    setEditingColumnName(e.target.value)
-                                  }
-                                  onBlur={(e) =>
+            {/* Vertically scrolling container */}
+            <div ref={tableContainerRef} className="h-full overflow-y-auto">
+              <table className="w-full min-w-max table-auto border-separate border-spacing-0">
+                {/* Table Header */}
+                <thead>
+                  <tr className="flex">
+                    <th className="sticky left-0 top-0 z-20 flex h-10 w-12 flex-shrink-0 items-center justify-center border-b border-r border-gray-200 bg-gray-50 text-center text-xs font-medium text-gray-500">
+                      #
+                    </th>
+                    {base?.columns?.map((col) => (
+                      <th
+                        key={col.id}
+                        className="sticky top-0 z-10 h-10 w-48 flex-shrink-0 border-b border-r border-gray-200 bg-gray-50 px-3 text-left text-xs font-medium text-gray-700"
+                      >
+                        <div className="flex h-full items-center space-x-2">
+                          {col.type === "TEXT" ? (
+                            <Bars3BottomLeftIcon className="h-4 w-4 flex-shrink-0 text-gray-500" />
+                          ) : (
+                            <HashtagIcon className="h-4 w-4 flex-shrink-0 text-gray-500" />
+                          )}
+                          <div className="flex flex-1 items-center">
+                            {editingColumn === col.id ? (
+                              <input
+                                autoFocus
+                                className="w-full rounded border border-blue-500 bg-white px-2 py-1 text-xs"
+                                value={editingColumnName}
+                                onChange={(e) =>
+                                  setEditingColumnName(e.target.value)
+                                }
+                                onBlur={(e) =>
+                                  handleColumnNameChange(col.id, e.target.value)
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
                                     handleColumnNameChange(
+                                      col.id,
+                                      e.currentTarget.value
+                                    );
+                                  } else if (e.key === "Escape") {
+                                    setEditingColumn(null);
+                                  }
+                                }}
+                              />
+                            ) : (
+                              <span
+                                className="flex-1 cursor-pointer truncate rounded px-1 py-0.5 hover:bg-gray-100"
+                                onClick={() =>
+                                  handleColumnClick(col.id, col.name)
+                                }
+                              >
+                                {col.name}
+                              </span>
+                            )}
+                          </div>
+                          <ChevronDown className="h-3 w-3 text-gray-400" />
+                        </div>
+                      </th>
+                    ))}
+                    <th className="w-12 flex-shrink-0 border-b border-l border-gray-200 bg-gray-50 p-0">
+                      <button
+                        ref={addColumnButtonRef}
+                        onClick={() => {
+                          setNewColumnName("");
+                          setShowAddColumnPopup((v) => !v);
+                        }}
+                        className="flex h-full w-full items-center justify-center rounded-none p-0 text-gray-500 hover:bg-gray-200"
+                      >
+                        <Plus className="h-5 w-5" />
+                      </button>
+                    </th>
+                  </tr>
+                </thead>
+                {/* Table Body */}
+                <tbody
+                  style={{
+                    height: `${rowVirtualizer.getTotalSize()}px`,
+                    position: "relative",
+                  }}
+                >
+                  {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                    const rowIdx = virtualRow.index;
+                    const row = processedRows[rowIdx];
+
+                    if (!row) return null;
+
+                    return (
+                      <tr
+                        key={row.id}
+                        className="flex hover:bg-gray-50"
+                        style={{
+                          position: "absolute",
+                          top: 0,
+                          left: 0,
+                          width: "max-content",
+                          height: `${virtualRow.size}px`,
+                          transform: `translateY(${virtualRow.start}px)`,
+                        }}
+                      >
+                        <td className="sticky left-0 z-10 flex h-10 w-12 flex-shrink-0 items-center justify-center border-b border-r border-gray-200 bg-gray-50 text-center text-xs text-gray-500">
+                          {rowIdx + 1}
+                        </td>
+                        {base?.columns.map((col, colIdx) => {
+                          const isSelected =
+                            selectedCell?.row === rowIdx &&
+                            selectedCell?.col === colIdx;
+                          const isEditing =
+                            editingCell?.row === rowIdx &&
+                            editingCell?.col === colIdx;
+                          const value = getCellValue(row, col.id);
+                          const isTempRow = row.id.startsWith("temp-row-");
+                          return (
+                            <td
+                              key={col.id}
+                              className={`relative flex h-10 w-48 flex-shrink-0 cursor-pointer items-center border-b border-r border-gray-200 px-3 ${
+                                isSelected || isEditing
+                                  ? "bg-white shadow-[inset_0_0_0_3px_#3b82f6]"
+                                  : ""
+                              }`}
+                              onClick={() => handleCellClick(rowIdx, colIdx)}
+                              onDoubleClick={() =>
+                                handleCellDoubleClick(rowIdx, colIdx)
+                              }
+                            >
+                              {isEditing ? (
+                                <input
+                                  disabled={isTempRow}
+                                  className="absolute inset-0 h-full w-full border-none bg-white px-3 py-0 text-sm outline-none"
+                                  autoFocus
+                                  value={value}
+                                  onChange={(e) =>
+                                    handleInputChange(
+                                      row.id,
                                       col.id,
                                       e.target.value
                                     )
                                   }
+                                  onBlur={handleEditEnd}
                                   onKeyDown={(e) => {
-                                    if (e.key === "Enter") {
-                                      handleColumnNameChange(
-                                        col.id,
-                                        e.currentTarget.value
-                                      );
-                                    } else if (e.key === "Escape") {
-                                      setEditingColumn(null);
+                                    if (
+                                      e.key === "Enter" ||
+                                      e.key === "Escape"
+                                    ) {
+                                      e.preventDefault();
+                                      handleEditEnd();
                                     }
                                   }}
                                 />
                               ) : (
-                                <span
-                                  className="flex-1 cursor-pointer truncate rounded px-1 py-0.5 hover:bg-gray-100"
-                                  onClick={() =>
-                                    handleColumnClick(col.id, col.name)
-                                  }
-                                >
-                                  {col.name}
-                                </span>
+                                <div className="truncate text-sm text-gray-700">
+                                  {value}
+                                </div>
                               )}
-                            </div>
-                            <ChevronDown className="h-3 w-3 text-gray-400" />
-                          </div>
-                        </th>
-                      ))}{" "}
-                      <th className="sticky right-0 z-10 w-12 flex-shrink-0 border-b border-l border-r border-gray-200 bg-gray-50 p-0">
-                        <button
-                          ref={addColumnButtonRef}
-                          onClick={() => {
-                            setNewColumnName("");
-                            setShowAddColumnPopup((v) => !v);
-                          }}
-                          className="flex h-full w-full items-center justify-center rounded-none p-0 text-gray-500 hover:bg-gray-200"
-                        >
-                          <Plus className="h-5 w-5" />
-                        </button>
-                      </th>
-                    </tr>
-                  </thead>
-                  {/* Table Body */}
-                  <tbody
-                    style={{
-                      height: `${rowVirtualizer.getTotalSize()}px`,
-                      position: "relative",
-                    }}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  {/* Row Placeholder */}
+                  <tr
+                    className="flex hover:bg-gray-100"
+                    style={{ width: "max-content" }}
                   >
-                    {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                      const rowIdx = virtualRow.index;
-                      const row = processedRows[rowIdx];
-
-                      if (!row) return null;
-
-                      return (
-                        <tr
-                          key={row.id}
-                          className="flex hover:bg-gray-50"
-                          style={{
-                            position: "absolute",
-                            top: 0,
-                            left: 0,
-                            width: "max-content",
-                            height: `${virtualRow.size}px`,
-                            transform: `translateY(${virtualRow.start}px)`,
-                          }}
-                        >
-                          {" "}
-                          <td className="flex h-10 w-12 flex-shrink-0 items-center justify-center border-b border-r border-gray-200 bg-gray-50 text-center text-xs text-gray-500">
-                            {rowIdx + 1}
-                          </td>
-                          {base?.columns.map((col, colIdx) => {
-                            const isSelected =
-                              selectedCell?.row === rowIdx &&
-                              selectedCell?.col === colIdx;
-                            const isEditing =
-                              editingCell?.row === rowIdx &&
-                              editingCell?.col === colIdx;
-                            const value = getCellValue(row, col.id);
-                            const isTempRow = row.id.startsWith("temp-row-");
-                            return (
-                              <td
-                                key={col.id}
-                                className={`relative flex h-10 w-48 flex-shrink-0 cursor-pointer items-center border-b border-r border-gray-200 px-3 ${
-                                  isSelected || isEditing
-                                    ? "bg-white shadow-[inset_0_0_0_3px_#3b82f6]"
-                                    : ""
-                                }`}
-                                onClick={() => handleCellClick(rowIdx, colIdx)}
-                                onDoubleClick={() =>
-                                  handleCellDoubleClick(rowIdx, colIdx)
-                                }
-                              >
-                                {isEditing ? (
-                                  <input
-                                    disabled={isTempRow}
-                                    className="absolute inset-0 h-full w-full border-none bg-white px-3 py-0 text-sm outline-none"
-                                    autoFocus
-                                    value={value}
-                                    onChange={(e) =>
-                                      handleInputChange(
-                                        row.id,
-                                        col.id,
-                                        e.target.value
-                                      )
-                                    }
-                                    onBlur={handleEditEnd}
-                                    onKeyDown={(e) => {
-                                      if (
-                                        e.key === "Enter" ||
-                                        e.key === "Escape"
-                                      ) {
-                                        e.preventDefault();
-                                        handleEditEnd();
-                                      }
-                                    }}
-                                  />
-                                ) : (
-                                  <div className="truncate text-sm text-gray-700">
-                                    {value}
-                                  </div>
-                                )}{" "}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot>
-                    {/* Row Placeholder */}
-                    <tr
-                      className="flex hover:bg-gray-100"
-                      style={{ width: "max-content" }}
-                    >
-                      <td className="flex h-10 w-12 flex-shrink-0 items-center justify-center border-b border-l border-gray-200">
-                        <button
-                          onClick={handleAddRow}
-                          disabled={addRow.isLoading}
-                          className="flex h-6 w-6 items-center justify-center rounded text-gray-500 disabled:opacity-50"
-                          title="Add row"
-                          type="button"
-                        >
-                          <Plus className="h-4 w-4" />
-                        </button>
-                      </td>
-                      {base?.columns.map((col, index) => (
-                        <td
-                          key={col.id}
-                          className={`h-10 w-48 flex-shrink-0 border-b border-gray-200 ${
-                            index === (base.columns.length ?? 0) - 1
-                              ? "border-r"
-                              : ""
-                          }`}
-                        ></td>
-                      ))}
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>{" "}
+                    <td className="sticky left-0 z-10 flex h-10 w-12 flex-shrink-0 items-center justify-center border-b border-l border-r border-gray-200 bg-white">
+                      <button
+                        onClick={handleAddRow}
+                        disabled={addRow.isLoading}
+                        className="flex h-6 w-6 items-center justify-center rounded text-gray-500 disabled:opacity-50"
+                        title="Add row"
+                        type="button"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </td>
+                    {base?.columns.map((col) => (
+                      <td
+                        key={col.id}
+                        className="h-10 w-48 flex-shrink-0 border-b border-r border-gray-200"
+                      ></td>
+                    ))}
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
           </div>
         </div>
       </div>
