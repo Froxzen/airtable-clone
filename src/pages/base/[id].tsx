@@ -122,6 +122,7 @@ const AirtableClone = () => {
   const [showSort, setShowSort] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const sortPopupRef = useRef<HTMLDivElement>(null);
+  const sortButtonRef = useRef<HTMLButtonElement>(null);
 
   // State for temporary row display
   const [tempRowIds, setTempRowIds] = useState<Set<string>>(new Set());
@@ -755,7 +756,9 @@ const AirtableClone = () => {
       if (
         showSort &&
         sortPopupRef.current &&
-        !sortPopupRef.current.contains(target)
+        !sortPopupRef.current.contains(target) &&
+        sortButtonRef.current &&
+        !sortButtonRef.current.contains(target)
       ) {
         setShowSort(false);
       }
@@ -1280,10 +1283,13 @@ const AirtableClone = () => {
         </button>
         <div className="relative inline-block">
           <button
-            className="flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-gray-600 shadow hover:bg-gray-100"
-            onClick={() => {
-              setShowSort((v) => !v);
-            }}
+            ref={sortButtonRef}
+            onClick={() => setShowSort(!showSort)}
+            className={`flex items-center gap-1 rounded px-3 py-1 text-sm font-medium shadow ${
+              isSortActive
+                ? "bg-white text-gray-700"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
             type="button"
           >
             <SortAsc className="h-4 w-4" />
