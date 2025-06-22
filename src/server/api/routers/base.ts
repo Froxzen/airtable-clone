@@ -319,7 +319,7 @@ export const baseRouter = createTRPCRouter({
       // For JSON fields in Prisma, we need to use raw queries or handle sorting in application code
       // Since Prisma doesn't support direct JSON field sorting with the syntax we were using,
       // we'll fetch all data and sort in JavaScript
-      let orderBy: Prisma.RowOrderByWithRelationInput[] = [{ id: "asc" }]; // We'll handle sorting in JavaScript after fetching the data
+      const orderBy: Prisma.RowOrderByWithRelationInput[] = [{ id: "asc" }]; // We'll handle sorting in JavaScript after fetching the data
       // because Prisma's JSON sorting syntax is limited
       // But limit the fetch size for performance with large datasets
       const fetchLimit = Math.min(limit * 10, 5000); // Fetch at most 5000 rows for sorting

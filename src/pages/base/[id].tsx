@@ -214,7 +214,6 @@ const AirtableClone = () => {
     {
       baseId,
       limit: PAGE_SIZE,
-      // Only pass complex query params when not bulk adding
       searchTerm: isBulkAdding ? undefined : searchTerm,
       filters: isBulkAdding ? undefined : allFilters,
       sortConfig: isBulkAdding ? undefined : sorts,
@@ -981,7 +980,7 @@ const AirtableClone = () => {
     const emptyData = Object.fromEntries(
       base.columns.map((col) => [col.id, ""])
     );
-    const totalRows = 1000;
+    const totalRows = 100;
     const BATCH_SIZE = 1250;
 
     const batches = [];
