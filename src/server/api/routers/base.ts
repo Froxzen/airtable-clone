@@ -52,23 +52,15 @@ export const baseRouter = createTRPCRouter({
           data: { name: "Name", baseId: base.id, order: 0 },
         }),
         ctx.prisma.column.create({
-          data: { name: "Address", baseId: base.id, order: 1 },
-        }),
-        ctx.prisma.column.create({
-          data: { name: "Score", baseId: base.id, order: 2, type: "NUMBER" },
-        }),
-        ctx.prisma.column.create({
-          data: { name: "Email", baseId: base.id, order: 3 },
+          data: { name: "id", baseId: base.id, order: 1, type: "NUMBER" },
         }),
       ]);
 
       // 3. Create 5 rows with faker data
-      const [nameCol, addressCol, scoreCol, emailCol] = columns;
+      const [nameCol, idCol] = columns;
       const rowsData = Array.from({ length: 5 }).map(() => ({
         [nameCol.id]: faker.person.fullName(),
-        [addressCol.id]: faker.location.streetAddress(),
-        [scoreCol.id]: faker.number.int({ min: 0, max: 1000 }),
-        [emailCol.id]: faker.internet.email(),
+        [idCol.id]: faker.number.int({ min: 0, max: 1000 }),
       }));
 
       await Promise.all(
@@ -316,12 +308,7 @@ export const baseRouter = createTRPCRouter({
       }
 
       // Handle sorting
-      // For JSON fields in Prisma, we need to use raw queries or handle sorting in application code
-      // Since Prisma doesn't support direct JSON field sorting with the syntax we were using,
-      // we'll fetch all data and sort in JavaScript
-      const orderBy: Prisma.RowOrderByWithRelationInput[] = [{ id: "asc" }]; // We'll handle sorting in JavaScript after fetching the data
-      // because Prisma's JSON sorting syntax is limited
-      // But limit the fetch size for performance with large datasets
+      const orderBy: Prisma.RowOrderByWithRelationInput[] = [{ id: "asc" }]; 
       const fetchLimit = Math.min(limit * 10, 5000); // Fetch at most 5000 rows for sorting
 
       const rows = await ctx.prisma.row.findMany({
