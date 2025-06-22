@@ -281,20 +281,14 @@ export const baseRouter = createTRPCRouter({
       }
       if (whereConditions.length > 0) {
         where.AND = whereConditions;
-      }
+      } // Handle sorting
+      // For JSON fields in Prisma, we need to use raw queries or handle sorting in application code
+      // Since Prisma doesn't support direct JSON field sorting with the syntax we were using,
+      // we'll fetch all data and sort in JavaScript
+      let orderBy: Prisma.RowOrderByWithRelationInput[] = [{ id: "asc" }];
 
-      // Handle sorting
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let orderBy: any = [{ id: "asc" }];
-      if (sortConfig && sortConfig.length > 0) {
-        orderBy = sortConfig.map((sort) => ({
-          data: {
-            path: [sort.columnId],
-            sort: sort.direction,
-            nulls: "last",
-          },
-        }));
-      }
+      // We'll handle sorting in JavaScript after fetching the data
+      // because Prisma's JSON sorting syntax is limited
 
       const rows = await ctx.prisma.row.findMany({
         where,
@@ -304,14 +298,59 @@ export const baseRouter = createTRPCRouter({
         take: limit + 1, // get an extra item to see if there's a next page
       });
 
+      // Apply sorting in JavaScript since Prisma JSON field sorting is limited
+      let sortedRows = rows;
+      if (sortConfig && sortConfig.length > 0) {
+        sortedRows = [...rows].sort((a, b) => {
+          for (const sort of sortConfig) {
+            const { columnId, direction } = sort;
+
+            // Extract values from JSON data
+            const aData = a.data as Record<string, unknown>;
+            const bData = b.data as Record<string, unknown>;
+            const aVal = aData[columnId];
+            const bVal = bData[columnId];
+
+            // Find column type for proper comparison
+            const column = columns.find((c) => c.id === columnId);
+            let comparison = 0;
+
+            if (column?.type === "NUMBER") {
+              const aNum =
+                aVal === null || aVal === undefined || aVal === ""
+                  ? -Infinity
+                  : Number(aVal);
+              const bNum =
+                bVal === null || bVal === undefined || bVal === ""
+                  ? -Infinity
+                  : Number(bVal);
+              if (!isNaN(aNum) && !isNaN(bNum)) {
+                comparison = aNum - bNum;
+              }
+            } else {
+              // Text comparison
+              const aStr = (aVal ?? "").toString().toLowerCase();
+              const bStr = (bVal ?? "").toString().toLowerCase();
+              if (aStr < bStr) comparison = -1;
+              if (aStr > bStr) comparison = 1;
+            }
+
+            if (comparison !== 0) {
+              return direction === "asc" ? comparison : -comparison;
+            }
+          }
+          return 0;
+        });
+      }
+
       let nextCursor: string | undefined = undefined;
-      if (rows.length > limit) {
-        const nextItem = rows.pop(); // return the correct number of items
+      if (sortedRows.length > limit) {
+        const nextItem = sortedRows.pop(); // return the correct number of items
         nextCursor = nextItem?.id;
       }
 
       return {
-        rows,
+        rows: sortedRows,
         nextCursor,
       };
     }),
