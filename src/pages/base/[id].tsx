@@ -584,9 +584,18 @@ const AirtableClone = () => {
 
           // After 1 second, check if the row should be hidden
           setTimeout(() => {
+            const cleanedNewRow = {
+              ...newRow,
+              data:
+                newRow.data &&
+                typeof newRow.data === "object" &&
+                !Array.isArray(newRow.data)
+                  ? newRow.data
+                  : {},
+            };
             // Check if the new row matches current filters/sorts
             const shouldBeVisible = checkIfRowMatches(
-              newRow,
+              cleanedNewRow,
               searchTerm,
               allFilters,
               sorts,
@@ -1101,7 +1110,7 @@ const AirtableClone = () => {
 
   // Helper function to check if a row matches the current filters, sorts, and search
   const checkIfRowMatches = (
-    row: any,
+    row: Row,
     searchTerm: string,
     filters: FilterType[],
     sorts: Sort[],
@@ -1109,18 +1118,15 @@ const AirtableClone = () => {
   ): boolean => {
     if (!columns) return true;
 
-    const rowData =
-      row.data && typeof row.data === "object" && !Array.isArray(row.data)
-        ? row.data
-        : {};
+    const rowData = row.data as { [key: string]: unknown };
 
     // Apply search filter
     if (searchTerm) {
       const matchesSearch = columns.some((col) => {
         const value = rowData[col.id];
         return (
-          value &&
-          value.toString().toLowerCase().includes(searchTerm.toLowerCase())
+          value != null &&
+          String(value).toLowerCase().includes(searchTerm.toLowerCase())
         );
       });
       if (!matchesSearch) return false;
