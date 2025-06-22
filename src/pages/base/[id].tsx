@@ -69,10 +69,10 @@ const AirtableClone = () => {
       `numberFilters_${baseId}`
     );
     const persistedSorts = localStorage.getItem(`sorts_${baseId}`);
-
     if (persistedTextFilters) {
       try {
-        setTextFilters(JSON.parse(persistedTextFilters));
+        const parsed = JSON.parse(persistedTextFilters) as FilterType[];
+        setTextFilters(parsed);
       } catch (e) {
         console.error("Failed to parse persisted text filters:", e);
       }
@@ -80,7 +80,8 @@ const AirtableClone = () => {
 
     if (persistedNumberFilters) {
       try {
-        setNumberFilters(JSON.parse(persistedNumberFilters));
+        const parsed = JSON.parse(persistedNumberFilters) as FilterType[];
+        setNumberFilters(parsed);
       } catch (e) {
         console.error("Failed to parse persisted number filters:", e);
       }
@@ -88,7 +89,8 @@ const AirtableClone = () => {
 
     if (persistedSorts) {
       try {
-        setSorts(JSON.parse(persistedSorts));
+        const parsed = JSON.parse(persistedSorts) as Sort[];
+        setSorts(parsed);
       } catch (e) {
         console.error("Failed to parse persisted sorts:", e);
       }
