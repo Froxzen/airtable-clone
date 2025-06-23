@@ -32,7 +32,11 @@ export const baseRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       return ctx.prisma.base.findUnique({
         where: { id: input.id },
-        select: { id: true, name: true },
+        include: {
+          tables: {
+            orderBy: { createdAt: "asc" },
+          },
+        },
       });
     }),
   create: protectedProcedure
@@ -46,13 +50,67 @@ export const baseRouter = createTRPCRouter({
         },
       });
 
+      // 2. Create default table
+      const table = await ctx.prisma.table.create({
+        data: {
+          name: "Table 1",
+          baseId: base.id,
+        },
+      });
+
+      // 3. Create columns
+      const columns = await ctx.prisma.$transaction([
+        ctx.prisma.column.create({
+          data: { name: "Name", tableId: table.id, order: 0 },
+        }),
+        ctx.prisma.column.create({
+          data: { name: "id", tableId: table.id, order: 1, type: "NUMBER" },
+        }),
+      ]);
+
+      // 4. Create 5 rows with faker data
+      const [nameCol, idCol] = columns;
+      const rowsData = Array.from({ length: 5 }).map(() => ({
+        [nameCol.id]: faker.person.fullName(),
+        [idCol.id]: faker.number.int({ min: 0, max: 1000 }),
+      }));
+
+      await Promise.all(
+        rowsData.map((row) =>
+          ctx.prisma.row.create({
+            data: {
+              tableId: table.id,
+              data: row,
+            },
+          })
+        )
+      );
+
+      return base;
+    }),
+  addTable: protectedProcedure
+    .input(
+      z.object({
+        baseId: z.string(),
+        name: z.string().min(1),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // 1. Create the table
+      const table = await ctx.prisma.table.create({
+        data: {
+          name: input.name,
+          baseId: input.baseId,
+        },
+      });
+
       // 2. Create columns
       const columns = await ctx.prisma.$transaction([
         ctx.prisma.column.create({
-          data: { name: "Name", baseId: base.id, order: 0 },
+          data: { name: "Name", tableId: table.id, order: 0 },
         }),
         ctx.prisma.column.create({
-          data: { name: "id", baseId: base.id, order: 1, type: "NUMBER" },
+          data: { name: "id", tableId: table.id, order: 1, type: "NUMBER" },
         }),
       ]);
 
@@ -67,37 +125,70 @@ export const baseRouter = createTRPCRouter({
         rowsData.map((row) =>
           ctx.prisma.row.create({
             data: {
-              baseId: base.id,
+              tableId: table.id,
               data: row,
             },
           })
         )
       );
 
-      return base;
+      return table;
     }),
+  // Legacy method - keeping for backwards compatibility but now gets first table
   getTable: protectedProcedure
     .input(z.object({ baseId: z.string() }))
     .query(async ({ ctx, input }) => {
       const base = await ctx.prisma.base.findUnique({
         where: { id: input.baseId },
-        select: {
-          id: true,
-          name: true,
+        include: {
+          tables: {
+            orderBy: { createdAt: "asc" },
+            take: 1,
+            include: {
+              columns: {
+                orderBy: { order: "asc" },
+              },
+            },
+          },
+        },
+      });
+
+      if (!base || !base.tables[0]) {
+        return null;
+      }
+
+      const table = base.tables[0];
+      return {
+        id: base.id,
+        name: base.name,
+        columns: table.columns,
+        rows: [],
+      };
+    }),
+
+  getTableById: protectedProcedure
+    .input(z.object({ tableId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const table = await ctx.prisma.table.findUnique({
+        where: { id: input.tableId },
+        include: {
+          base: {
+            select: { id: true, name: true },
+          },
         },
       });
       const columns = await ctx.prisma.column.findMany({
-        where: { baseId: input.baseId },
+        where: { tableId: input.tableId },
         orderBy: { order: "asc" },
       });
       // Don't return rows here since we use pagination
-      return { ...base, columns, rows: [] };
+      return { ...table, columns, rows: [] };
     }),
 
   addColumn: protectedProcedure
     .input(
       z.object({
-        baseId: z.string(),
+        tableId: z.string(),
         name: z.string(),
         order: z.number(),
         type: z.nativeEnum(ColumnType),
@@ -106,7 +197,7 @@ export const baseRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       return ctx.prisma.column.create({
         data: {
-          baseId: input.baseId,
+          tableId: input.tableId,
           name: input.name,
           order: input.order,
           type: input.type,
@@ -127,18 +218,17 @@ export const baseRouter = createTRPCRouter({
         data: { name: input.name },
       });
     }),
-
   addRow: protectedProcedure
     .input(
       z.object({
-        baseId: z.string(),
+        tableId: z.string(),
         data: tableRowSchema,
       })
     )
     .mutation(async ({ ctx, input }) => {
       return ctx.prisma.row.create({
         data: {
-          baseId: input.baseId,
+          tableId: input.tableId,
           data: input.data,
         },
       });
@@ -146,15 +236,15 @@ export const baseRouter = createTRPCRouter({
   addManyRows: protectedProcedure
     .input(
       z.object({
-        baseId: z.string(),
+        tableId: z.string(),
         count: z.number(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { baseId, count } = input;
+      const { tableId, count } = input;
 
       const columns = await ctx.prisma.column.findMany({
-        where: { baseId },
+        where: { tableId },
         orderBy: { order: "asc" },
       });
 
@@ -176,7 +266,7 @@ export const baseRouter = createTRPCRouter({
       });
 
       const dataToCreate = rowsData.map((rowData) => ({
-        baseId: input.baseId,
+        tableId: input.tableId,
         data: rowData as Prisma.JsonObject,
       }));
 
@@ -187,7 +277,7 @@ export const baseRouter = createTRPCRouter({
       // Fetch the newly created rows since createMany doesn't return them
       const newRows = await ctx.prisma.row.findMany({
         where: {
-          baseId: input.baseId,
+          tableId: input.tableId,
         },
         orderBy: {
           id: "desc",
@@ -200,7 +290,7 @@ export const baseRouter = createTRPCRouter({
   getRowsInfinite: protectedProcedure
     .input(
       z.object({
-        baseId: z.string(),
+        tableId: z.string(),
         limit: z.number(),
         cursor: z.string().nullish(), // cursor can be a string or null
         searchTerm: z.string().optional(),
@@ -209,12 +299,12 @@ export const baseRouter = createTRPCRouter({
       })
     )
     .query(async ({ ctx, input }) => {
-      const { baseId, limit, cursor, searchTerm, filters, sortConfig } = input;
+      const { tableId, limit, cursor, searchTerm, filters, sortConfig } = input;
 
-      const where: Prisma.RowWhereInput = { baseId };
+      const where: Prisma.RowWhereInput = { tableId };
       const whereConditions: Prisma.RowWhereInput[] = [];
       const columns = await ctx.prisma.column.findMany({
-        where: { baseId: input.baseId },
+        where: { tableId: input.tableId },
         select: { id: true, type: true },
       });
 
@@ -324,7 +414,7 @@ export const baseRouter = createTRPCRouter({
           where,
           select: {
             id: true,
-            baseId: true,
+            tableId: true,
             data: true,
             // Don't select createdAt/updatedAt for better performance
           },

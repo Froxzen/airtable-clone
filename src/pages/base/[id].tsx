@@ -32,6 +32,9 @@ import { flushSync } from "react-dom";
 const AirtableClone = () => {
   const router = useRouter();
   const baseId = router.query.id as string;
+  const [activeTableId, setActiveTableId] = useState<string | null>(null);
+  const [showAddTableModal, setShowAddTableModal] = useState(false);
+  const [newTableName, setNewTableName] = useState("");
   const [selectedCell, setSelectedCell] = useState<{
     row: number;
     col: number;
@@ -120,22 +123,41 @@ const AirtableClone = () => {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const sortPopupRef = useRef<HTMLDivElement>(null);
   const sortButtonRef = useRef<HTMLButtonElement>(null);
+  const addTableButtonRef = useRef<HTMLButtonElement>(null);
 
   // State for temporary row display
   const [tempRowIds, setTempRowIds] = useState<Set<string>>(new Set());
   const [animatingOutRowIds, setAnimatingOutRowIds] = useState<Set<string>>(
     new Set()
   );
-
-  // Fetch persistent columns and rows from backend
-  const { data: base } = trpc.base.getTable.useQuery(
-    { baseId },
+  // Fetch base with all tables
+  const { data: baseWithTables } = trpc.base.getById.useQuery(
+    { id: baseId },
     { enabled: !!baseId }
-  ) as { data: Base | undefined };
+  );
+  // Set active table to first table if none selected
+  useEffect(() => {
+    if (
+      baseWithTables?.tables &&
+      baseWithTables.tables.length > 0 &&
+      !activeTableId
+    ) {
+      setActiveTableId(baseWithTables.tables[0]!.id);
+    }
+  }, [baseWithTables, activeTableId]);
+
+  // Fetch current table data
+  const { data: currentTable } = trpc.base.getTableById.useQuery(
+    { tableId: activeTableId! },
+    { enabled: !!activeTableId }
+  ) as { data: any };
+
+  // For backward compatibility, use currentTable as base
+  const base = currentTable;
 
   // Calculate base color (same logic as dashboard)
   const getBaseColor = useMemo(() => {
-    if (!base?.id) return "bg-purple-500";
+    if (!baseWithTables?.id) return "bg-purple-500";
 
     const colors = [
       "bg-red-500",
@@ -166,11 +188,11 @@ const AirtableClone = () => {
       return Math.abs(hash);
     }
 
-    return colors[hashString(base.id) % colors.length];
-  }, [base?.id]);
+    return colors[hashString(baseWithTables.id) % colors.length];
+  }, [baseWithTables?.id]);
 
   const getSecondaryBaseColor = useMemo(() => {
-    if (!base?.id) return "bg-purple-600";
+    if (!baseWithTables?.id) return "bg-purple-600";
 
     const colors = [
       "bg-red-600",
@@ -200,8 +222,8 @@ const AirtableClone = () => {
       }
       return Math.abs(hash);
     }
-    return colors[hashString(base.id) % colors.length];
-  }, [base?.id]);
+    return colors[hashString(baseWithTables.id) % colors.length];
+  }, [baseWithTables?.id]);
 
   const utils = trpc.useUtils();
   const cellUpdateTimeouts = useRef(new Map<string, NodeJS.Timeout>());
@@ -221,13 +243,13 @@ const AirtableClone = () => {
     isFetchingNextPage,
   } = trpc.base.getRowsInfinite.useInfiniteQuery(
     {
-      baseId,
+      tableId: activeTableId!,
       limit: PAGE_SIZE,
       filters: allFilters,
       sortConfig: sorts,
     },
     {
-      enabled: !!baseId,
+      enabled: !!activeTableId,
       getNextPageParam: (lastPage) => lastPage.nextCursor,
       keepPreviousData: true,
     }
@@ -368,7 +390,7 @@ const AirtableClone = () => {
           const aVal = a.data[columnId];
           const bVal = b.data[columnId];
 
-          const column = base?.columns.find((c) => c.id === columnId);
+          const column = base?.columns.find((c: any) => c.id === columnId);
 
           let comparison = 0;
 
@@ -433,21 +455,29 @@ const AirtableClone = () => {
     isFetchingNextPage,
     fetchNextPage,
   ]);
-
   const addColumn = trpc.base.addColumn.useMutation({
     onMutate: async ({ name, order }) => {
-      await utils.base.getTable.cancel({ baseId });
+      if (!activeTableId) return;
+      await utils.base.getTableById.cancel({ tableId: activeTableId });
 
-      const previousData = utils.base.getTable.getData({ baseId });
+      const previousData = utils.base.getTableById.getData({
+        tableId: activeTableId,
+      });
 
       const tempId = `temp-col-${Date.now()}`;
-      utils.base.getTable.setData({ baseId }, (old) =>
+      utils.base.getTableById.setData({ tableId: activeTableId }, (old) =>
         old
           ? {
               ...old,
               columns: [
                 ...old.columns,
-                { id: tempId, baseId, name, order, type: "TEXT" },
+                {
+                  id: tempId,
+                  tableId: activeTableId,
+                  name,
+                  order,
+                  type: "TEXT",
+                },
               ],
             }
           : old
@@ -456,8 +486,9 @@ const AirtableClone = () => {
       return { previousData, tempId };
     },
     onSuccess: (newCol, _, context) => {
+      if (!activeTableId) return;
       // Update with real data from server
-      utils.base.getTable.setData({ baseId }, (old) => {
+      utils.base.getTableById.setData({ tableId: activeTableId }, (old) => {
         if (!old || !context) return old;
         return {
           ...old,
@@ -468,10 +499,28 @@ const AirtableClone = () => {
       });
     },
     onError: (_, __, context) => {
+      if (!activeTableId) return;
       // Rollback on error
       if (context?.previousData) {
-        utils.base.getTable.setData({ baseId }, context.previousData);
+        utils.base.getTableById.setData(
+          { tableId: activeTableId },
+          context.previousData
+        );
       }
+    },
+  });
+
+  const addTable = trpc.base.addTable.useMutation({
+    onSuccess: (newTable) => {
+      // Refetch the base with tables
+      void utils.base.getById.invalidate({ id: baseId });
+      // Switch to the new table
+      setActiveTableId(newTable.id);
+      setShowAddTableModal(false);
+      setNewTableName("");
+    },
+    onError: (error) => {
+      console.error("Failed to add table:", error);
     },
   });
 
@@ -506,8 +555,9 @@ const AirtableClone = () => {
   });
   const addRow = trpc.base.addRow.useMutation({
     onMutate: async ({ data }) => {
+      if (!activeTableId) return;
       const queryKey = {
-        baseId,
+        tableId: activeTableId,
         limit: PAGE_SIZE,
         filters: allFilters,
         sortConfig: sorts,
@@ -517,7 +567,7 @@ const AirtableClone = () => {
       const tempId = `temp-row-${Date.now()}`;
       const tempRow = {
         id: tempId,
-        baseId,
+        tableId: activeTableId,
         data: data as Prisma.JsonObject,
       };
 
@@ -547,9 +597,9 @@ const AirtableClone = () => {
       return { previousData, tempId };
     },
     onSuccess: (newRow, _, context) => {
-      if (context) {
+      if (context && activeTableId) {
         const queryKey = {
-          baseId,
+          tableId: activeTableId,
           limit: PAGE_SIZE,
           filters: allFilters,
           sortConfig: sorts,
@@ -633,7 +683,7 @@ const AirtableClone = () => {
     onError: (_, __, context) => {
       if (context?.previousData) {
         const queryKey = {
-          baseId,
+          tableId: activeTableId!,
           limit: PAGE_SIZE,
           filters: allFilters,
           sortConfig: sorts,
@@ -648,7 +698,7 @@ const AirtableClone = () => {
   const updateRow = trpc.base.updateRow.useMutation({
     onMutate: async ({ rowId, data }) => {
       const queryKey = {
-        baseId,
+        tableId: activeTableId!,
         limit: PAGE_SIZE,
         filters: allFilters,
         sortConfig: sorts,
@@ -675,7 +725,7 @@ const AirtableClone = () => {
     },
     onSuccess: (updatedRow) => {
       const queryKey = {
-        baseId,
+        tableId: activeTableId!,
         limit: PAGE_SIZE,
         filters: allFilters,
         sortConfig: sorts,
@@ -705,7 +755,7 @@ const AirtableClone = () => {
     },
     onError: (_error, _variables, context) => {
       const queryKey = {
-        baseId,
+        tableId: activeTableId!,
         limit: PAGE_SIZE,
         filters: allFilters,
         sortConfig: sorts,
@@ -772,9 +822,8 @@ const AirtableClone = () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [showSort, showAddColumnPopup]);
-
   const handleAddColumn = (type: "TEXT" | "NUMBER") => {
-    if (!base) return;
+    if (!base || !activeTableId) return;
 
     const name = newColumnName.trim();
     if (!name) {
@@ -782,7 +831,7 @@ const AirtableClone = () => {
     }
 
     void addColumn.mutateAsync({
-      baseId,
+      tableId: activeTableId,
       name,
       order: base.columns.length,
       type: type,
@@ -790,13 +839,12 @@ const AirtableClone = () => {
     setShowAddColumnPopup(false);
     setNewColumnName("");
   };
-
   const handleAddRow = () => {
-    if (!base) return;
+    if (!base || !activeTableId) return;
     const emptyData = Object.fromEntries(
-      base.columns.map((col) => [col.id, ""])
+      base.columns.map((col: any) => [col.id, ""])
     );
-    void addRow.mutateAsync({ baseId, data: emptyData });
+    void addRow.mutateAsync({ tableId: activeTableId, data: emptyData });
   };
   // Debounced cell update to prevent excessive API calls
   const handleCellValueChange = (
@@ -819,7 +867,7 @@ const AirtableClone = () => {
       const row = allRows.find((r) => r.id === rowId);
       if (!row) return;
 
-      const col = base?.columns.find((c) => c.id === colId);
+      const col = base?.columns.find((c: Column) => c.id === colId);
       const dataObj = row.data ?? {};
       let finalValue: string | number | null = value;
 
@@ -919,7 +967,7 @@ const AirtableClone = () => {
 
   // Handle input change for editing cells
   const handleInputChange = (rowId: string, colId: string, value: string) => {
-    const column = base?.columns.find((c) => c.id === colId);
+    const column = base?.columns.find((c: Column) => c.id === colId);
 
     if (column?.type === "NUMBER") {
       // Allow empty string, a single minus sign, and valid numeric patterns (int/float).
@@ -1019,7 +1067,7 @@ const AirtableClone = () => {
 
     if (
       newName.trim() &&
-      newName !== base?.columns.find((col) => col.id === columnId)?.name
+      newName !== base?.columns.find((col: Column) => col.id === columnId)?.name
     ) {
       void updateColumn.mutateAsync({
         columnId,
@@ -1047,7 +1095,7 @@ const AirtableClone = () => {
               : {},
         }));
         const queryKey = {
-          baseId,
+          tableId: activeTableId!,
           limit: PAGE_SIZE,
           filters: allFilters,
           sortConfig: sorts,
@@ -1100,7 +1148,7 @@ const AirtableClone = () => {
         await new Promise<void>((resolve, reject) => {
           addManyRows(
             {
-              baseId,
+              tableId: activeTableId!,
               count: 5000,
             },
             {
@@ -1269,9 +1317,51 @@ const AirtableClone = () => {
           getSecondaryBaseColor ?? "bg-purple-600"
         }`}
       >
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-1">
-            <span>Table 1</span>
+        <div className="flex w-full items-center space-x-4">
+          {/* Horizontally scrollable table tabs */}
+          <div className="min-w-0 flex-1">
+            <div className="scrollbar-thin table-tabs-scrollbar overflow-x-auto">
+              <div
+                className="flex min-w-max items-center space-x-1 py-1"
+                style={{ WebkitOverflowScrolling: "touch" }}
+              >
+                {baseWithTables?.tables?.map((table) => (
+                  <button
+                    key={table.id}
+                    onClick={() => {
+                      setActiveTableId(table.id);
+                      setSorts([]);
+                      setTextFilters([]);
+                      setNumberFilters([]);
+                      setSearchTerm("");
+                      setShowSort(false);
+                      // Clear persisted data for previous table/base
+                      if (baseId) {
+                        localStorage.removeItem(`textFilters_${baseId}`);
+                        localStorage.removeItem(`numberFilters_${baseId}`);
+                        localStorage.removeItem(`sorts_${baseId}`);
+                      }
+                    }}
+                    className={`rounded px-3 py-1 text-sm font-medium ${
+                      activeTableId === table.id
+                        ? "bg-white bg-opacity-20 text-white"
+                        : "text-white hover:bg-white hover:bg-opacity-10"
+                    }`}
+                  >
+                    {table.name}
+                  </button>
+                ))}
+                {/* Add Table Button */}
+                <button
+                  ref={addTableButtonRef}
+                  onClick={() => setShowAddTableModal(true)}
+                  className="flex items-center gap-1 rounded px-3 py-1 text-sm font-medium text-white hover:bg-white hover:bg-opacity-10"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Table
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1340,7 +1430,7 @@ const AirtableClone = () => {
                       }
                     >
                       <option value="">Select a column</option>
-                      {base?.columns.map((col) => (
+                      {base?.columns.map((col: Column) => (
                         <option key={col.id} value={col.id}>
                           {col.name}
                         </option>
@@ -1391,7 +1481,7 @@ const AirtableClone = () => {
                       }}
                     >
                       <option value="">Select a column</option>
-                      {base?.columns.map((col) => (
+                      {base?.columns.map((col: Column) => (
                         <option key={col.id} value={col.id}>
                           {col.name}
                         </option>
@@ -1428,7 +1518,7 @@ const AirtableClone = () => {
         {base && (
           <>
             <FilterComponent
-              columns={base.columns.filter((c) => c.type === "TEXT")}
+              columns={base.columns.filter((c: Column) => c.type === "TEXT")}
               filters={textFilters}
               onAddFilter={handleAddTextFilter}
               onRemoveFilter={handleRemoveTextFilter}
@@ -1437,7 +1527,7 @@ const AirtableClone = () => {
               buttonLabel="Filter Text"
             />
             <FilterComponent
-              columns={base.columns.filter((c) => c.type === "NUMBER")}
+              columns={base.columns.filter((c: Column) => c.type === "NUMBER")}
               filters={numberFilters}
               onAddFilter={handleAddNumberFilter}
               onRemoveFilter={handleRemoveNumberFilter}
@@ -1488,7 +1578,7 @@ const AirtableClone = () => {
         {/* Left Sidebar: Views & Create */}
         <div className="w-64 flex-shrink-0 border-r border-gray-200 bg-gray-50 p-3">
           {/* Views Section */}
-          <div className="mb-16">
+          <div className="mb-4">
             <div className="relative mb-3">
               <Search className="absolute left-2 top-2 h-4 w-4 text-gray-400" />
               <input
@@ -1584,7 +1674,7 @@ const AirtableClone = () => {
                     <th className="sticky left-0 top-0 z-20 flex h-10 w-12 flex-shrink-0 items-center justify-center border-b border-r border-gray-200 bg-gray-50 text-center text-xs font-medium text-gray-500">
                       #
                     </th>
-                    {base?.columns?.map((col) => (
+                    {base?.columns?.map((col: Column) => (
                       <th
                         key={col.id}
                         className="sticky top-0 z-10 h-10 w-48 flex-shrink-0 border-b border-r border-gray-200 bg-gray-50 px-3 text-left text-xs font-medium text-gray-700"
@@ -1685,7 +1775,7 @@ const AirtableClone = () => {
                               <Plus className="h-4 w-4" />
                             </button>
                           </td>
-                          {base?.columns.map((col, index) => (
+                          {base?.columns.map((col: Column, index: number) => (
                             <td
                               key={col.id}
                               className={`h-10 w-48 flex-shrink-0 border-b border-gray-200 group-hover:bg-gray-50 ${
@@ -1726,7 +1816,7 @@ const AirtableClone = () => {
                         <td className="sticky left-0 z-10 flex h-10 w-12 flex-shrink-0 items-center justify-center border-b border-r border-gray-200 bg-gray-50 text-center text-xs text-gray-500">
                           {rowIdx + 1}
                         </td>
-                        {base?.columns.map((col, colIdx) => {
+                        {base?.columns.map((col: Column, colIdx: number) => {
                           const isSelected =
                             selectedCell?.row === rowIdx &&
                             selectedCell?.col === colIdx;
@@ -1855,6 +1945,81 @@ const AirtableClone = () => {
           </div>
         </div>
       )}
+
+      {/* Add Table Modal */}
+      {showAddTableModal && (
+        <div
+          className="absolute z-20 w-64 rounded-md border border-gray-200 bg-white p-4 shadow-lg"
+          style={{
+            top: addTableButtonRef.current
+              ? addTableButtonRef.current.getBoundingClientRect().bottom +
+                window.scrollY
+              : 0,
+            left: addTableButtonRef.current
+              ? addTableButtonRef.current.getBoundingClientRect().right +
+                window.scrollX -
+                256 // 256px = w-64
+              : 0,
+          }}
+        >
+          <div className="mb-2 text-lg font-semibold text-gray-800">
+            Add Table
+          </div>
+          <input
+            type="text"
+            value={newTableName}
+            onChange={(e) => setNewTableName(e.target.value)}
+            placeholder="Table name"
+            className="mb-3 w-full rounded border border-gray-300 px-2 py-1.5 text-sm text-gray-800 placeholder-gray-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && newTableName.trim()) {
+                addTable.mutate({ baseId, name: newTableName.trim() });
+              } else if (e.key === "Escape") {
+                setShowAddTableModal(false);
+                setNewTableName("");
+              }
+            }}
+          />
+          <div className="flex justify-end gap-2">
+            <button
+              className="rounded bg-gray-100 px-3 py-1 text-sm text-gray-700 hover:bg-gray-200"
+              onClick={() => {
+                setShowAddTableModal(false);
+                setNewTableName("");
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              className="rounded bg-purple-600 px-3 py-1 text-sm text-white hover:bg-purple-700 disabled:opacity-50"
+              disabled={!newTableName.trim() || addTable.isLoading}
+              onClick={() =>
+                addTable.mutate({ baseId, name: newTableName.trim() })
+              }
+            >
+              {addTable.isLoading ? "Adding..." : "Add"}
+            </button>
+          </div>
+        </div>
+      )}
+      <style jsx global>{`
+        .table-tabs-scrollbar::-webkit-scrollbar {
+          height: 6px;
+          background: transparent;
+        }
+        .table-tabs-scrollbar::-webkit-scrollbar-thumb {
+          background: #fff;
+          border-radius: 3px;
+        }
+        .table-tabs-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .table-tabs-scrollbar {
+          scrollbar-color: #fff transparent;
+          scrollbar-width: thin;
+        }
+      `}</style>
     </div>
   );
 };
