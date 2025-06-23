@@ -35,6 +35,7 @@ const AirtableClone = () => {
   const [activeTableId, setActiveTableId] = useState<string | null>(null);
   const [showAddTableModal, setShowAddTableModal] = useState(false);
   const [newTableName, setNewTableName] = useState("");
+  const addTableButtonRef = useRef<HTMLButtonElement>(null);
   const [selectedCell, setSelectedCell] = useState<{
     row: number;
     col: number;
@@ -123,7 +124,7 @@ const AirtableClone = () => {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const sortPopupRef = useRef<HTMLDivElement>(null);
   const sortButtonRef = useRef<HTMLButtonElement>(null);
-  const addTableButtonRef = useRef<HTMLButtonElement>(null);
+  const addTablePopupRef = useRef<HTMLDivElement>(null);
 
   // State for temporary row display
   const [tempRowIds, setTempRowIds] = useState<Set<string>>(new Set());
@@ -834,13 +835,44 @@ const AirtableClone = () => {
       ) {
         setShowAddColumnPopup(false);
       }
+
+      if (
+        showAddTableModal &&
+        addTablePopupRef.current &&
+        !addTablePopupRef.current.contains(target) &&
+        addTableButtonRef.current &&
+        !addTableButtonRef.current.contains(target)
+      ) {
+        setShowAddTableModal(false);
+        setNewTableName("");
+      }
     };
 
     document.addEventListener("mousedown", handleClickOutside);
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [showSort, showAddColumnPopup]);
+  }, [showSort, showAddColumnPopup, showAddTableModal]);
+  // Click outside to close Add Table popup
+  useEffect(() => {
+    if (!showAddTableModal) return;
+    function handleClick(event: PointerEvent) {
+      const target = event.target as Node;
+      if (
+        addTablePopupRef.current &&
+        !addTablePopupRef.current.contains(target) &&
+        addTableButtonRef.current &&
+        !addTableButtonRef.current.contains(target)
+      ) {
+        setShowAddTableModal(false);
+        setNewTableName("");
+      }
+      
+    }
+    document.addEventListener("pointerdown", handleClick);
+    return () => document.removeEventListener("pointerdown", handleClick);
+  }, [showAddTableModal]);
+
   const handleAddColumn = (type: "TEXT" | "NUMBER") => {
     if (!base || !activeTableId) return;
 
@@ -1375,7 +1407,15 @@ const AirtableClone = () => {
                 {/* Add Table Button */}
                 <button
                   ref={addTableButtonRef}
-                  onClick={() => setShowAddTableModal(true)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (showAddTableModal) {
+                      setShowAddTableModal(false);
+                      setNewTableName("");
+                    } else {
+                      setShowAddTableModal(true);
+                    }
+                  }}
                   className="flex items-center gap-1 rounded px-3 py-1 text-sm font-medium text-white hover:bg-white hover:bg-opacity-10"
                 >
                   <Plus className="h-4 w-4" />
@@ -1949,6 +1989,7 @@ const AirtableClone = () => {
       {/* Add Table Modal */}
       {showAddTableModal && (
         <div
+          ref={addTablePopupRef}
           className="absolute z-20 w-64 rounded-md border border-gray-200 bg-white p-4 shadow-lg"
           style={(() => {
             if (
@@ -2001,7 +2042,6 @@ const AirtableClone = () => {
             <button
               className="rounded bg-gray-100 px-3 py-1 text-sm text-gray-700 hover:bg-gray-200"
               onClick={() => {
-                setShowAddTableModal(false);
                 setNewTableName("");
               }}
             >
@@ -2037,9 +2077,10 @@ const AirtableClone = () => {
         }
         .table-heading-scrollbar::-webkit-scrollbar {
           height: 4px;
+         
           background: transparent;
         }
-        .table-heading-scrollbar::-webkit-scrollbar-thumb {
+               .table-heading-scrollbar::-webkit-scrollbar-thumb {
           background: #bbb;
           border-radius: 2px;
         }
