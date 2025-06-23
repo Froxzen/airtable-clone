@@ -223,7 +223,6 @@ const AirtableClone = () => {
     {
       baseId,
       limit: PAGE_SIZE,
-      searchTerm,
       filters: allFilters,
       sortConfig: sorts,
     },
@@ -280,28 +279,37 @@ const AirtableClone = () => {
         }))
       ) ?? [],
     [infiniteData]
-  );
+  ); // Helper function to highlight search matches
+  const highlightSearchMatch = (text: string, searchTerm: string) => {
+    if (!searchTerm.trim()) return text;
+
+    const escapedSearchTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(`(${escapedSearchTerm})`, "gi");
+    const parts = text.split(regex);
+
+    return parts.map((part, index) =>
+      index % 2 === 1 ? (
+        <span key={index} className="rounded bg-yellow-200">
+          {part}
+        </span>
+      ) : (
+        part
+      )
+    );
+  };
+  // Helper function to check if cell matches search
+  const cellMatchesSearch = (value: string, searchTerm: string): boolean => {
+    if (!searchTerm.trim()) return false;
+    return value.toLowerCase().includes(searchTerm.toLowerCase());
+  };
+
   // Single computed variable that handles all filtering, sorting, and searching
   const processedRows = useMemo(() => {
     if (!allRows.length) return [];
 
     let rows = allRows;
 
-    // Apply search filter
-    if (searchTerm) {
-      rows = rows.filter((row) => {
-        // Always show temporary rows during their display period
-        if (tempRowIds.has(row.id)) return true;
-
-        return base?.columns?.some((col) => {
-          const value = row.data[col.id];
-          return (
-            value &&
-            value.toString().toLowerCase().includes(searchTerm.toLowerCase())
-          );
-        });
-      });
-    }
+    // Remove search filter from here - we'll handle highlighting instead
 
     // Apply column filters
     if (allFilters.length > 0) {
@@ -392,7 +400,7 @@ const AirtableClone = () => {
     }
 
     return rows;
-  }, [allRows, searchTerm, allFilters, sorts, base?.columns, tempRowIds]);
+  }, [allRows, allFilters, sorts, base?.columns, tempRowIds]);
 
   type Row = (typeof allRows)[number];
 
@@ -410,9 +418,9 @@ const AirtableClone = () => {
     const lastItem = virtualItems[virtualItems.length - 1];
     if (!lastItem) {
       return;
-    } // Load next page earlier when scrolling fast - trigger at 50 rows before end
+    } // Load next page earlier when scrolling fast - trigger at 100 rows before end
     if (
-      lastItem.index >= processedRows.length - 50 &&
+      lastItem.index >= processedRows.length - 100 &&
       hasNextPage &&
       !isFetchingNextPage
     ) {
@@ -501,7 +509,6 @@ const AirtableClone = () => {
       const queryKey = {
         baseId,
         limit: PAGE_SIZE,
-        searchTerm,
         filters: allFilters,
         sortConfig: sorts,
       };
@@ -544,7 +551,6 @@ const AirtableClone = () => {
         const queryKey = {
           baseId,
           limit: PAGE_SIZE,
-          searchTerm,
           filters: allFilters,
           sortConfig: sorts,
         };
@@ -569,11 +575,9 @@ const AirtableClone = () => {
               ),
             })),
           };
-        });
-
-        // Handle temporary row display logic when filters/sorts are active
+        }); // Handle temporary row display logic when filters/sorts are active
         const hasActiveFiltersOrSorts =
-          allFilters.length > 0 || sorts.length > 0 || searchTerm;
+          allFilters.length > 0 || sorts.length > 0;
         if (hasActiveFiltersOrSorts) {
           // Mark this row as temporary
           setTempRowIds((prev) => new Set(prev).add(newRow.id));
@@ -588,11 +592,10 @@ const AirtableClone = () => {
                 !Array.isArray(newRow.data)
                   ? newRow.data
                   : {},
-            };
-            // Check if the new row matches current filters/sorts
+            }; // Check if the new row matches current filters/sorts
             const shouldBeVisible = checkIfRowMatches(
               cleanedNewRow,
-              searchTerm,
+              "",
               allFilters,
               sorts,
               base?.columns
@@ -632,7 +635,6 @@ const AirtableClone = () => {
         const queryKey = {
           baseId,
           limit: PAGE_SIZE,
-          searchTerm,
           filters: allFilters,
           sortConfig: sorts,
         };
@@ -648,7 +650,6 @@ const AirtableClone = () => {
       const queryKey = {
         baseId,
         limit: PAGE_SIZE,
-        searchTerm,
         filters: allFilters,
         sortConfig: sorts,
       };
@@ -676,7 +677,6 @@ const AirtableClone = () => {
       const queryKey = {
         baseId,
         limit: PAGE_SIZE,
-        searchTerm,
         filters: allFilters,
         sortConfig: sorts,
       };
@@ -707,7 +707,6 @@ const AirtableClone = () => {
       const queryKey = {
         baseId,
         limit: PAGE_SIZE,
-        searchTerm,
         filters: allFilters,
         sortConfig: sorts,
       };
@@ -1047,11 +1046,9 @@ const AirtableClone = () => {
               ? row.data
               : {},
         }));
-
         const queryKey = {
           baseId,
           limit: PAGE_SIZE,
-          searchTerm,
           filters: allFilters,
           sortConfig: sorts,
         };
@@ -1744,6 +1741,8 @@ const AirtableClone = () => {
                               className={`relative flex h-10 w-48 flex-shrink-0 cursor-pointer items-center border-b border-r border-gray-200 px-3 ${
                                 isSelected || isEditing
                                   ? "bg-white shadow-[inset_0_0_0_3px_#3b82f6]"
+                                  : cellMatchesSearch(value, searchTerm)
+                                  ? "bg-yellow-200"
                                   : ""
                               }`}
                               onClick={() => handleCellClick(rowIdx, colIdx)}
@@ -1777,7 +1776,9 @@ const AirtableClone = () => {
                                 />
                               ) : (
                                 <div className="truncate text-sm text-gray-700">
-                                  {value}
+                                  {searchTerm.trim()
+                                    ? highlightSearchMatch(value, searchTerm)
+                                    : value}
                                 </div>
                               )}
                             </td>
