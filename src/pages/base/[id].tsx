@@ -471,9 +471,6 @@ const AirtableClone = () => {
 
   const virtualItems = rowVirtualizer.getVirtualItems();
 
-  // Disable sort/filter if not all rows are loaded
-  const disableSortAndFilter = hasNextPage || isFetchingNextPage;
-
   useEffect(() => {
     const lastItem = virtualItems[virtualItems.length - 1];
     if (!lastItem) {
@@ -1289,6 +1286,10 @@ const AirtableClone = () => {
     return true;
   };
 
+  // Disable sort/filter if not all rows are loaded
+  // const disableSortAndFilter = hasNextPage || isFetchingNextPage;
+  const disableSortAndFilter = false;
+
   if (session === undefined) {
     // Session is loading
     return (
@@ -1463,7 +1464,7 @@ const AirtableClone = () => {
                 : "bg-white text-gray-600 hover:bg-gray-100"
             } disabled:cursor-not-allowed disabled:opacity-50`}
             type="button"
-            disabled={disableSortAndFilter || isAddingManyRows}
+            disabled={isAddingManyRows}
           >
             <SortAsc className="h-4 w-4" />
             Sort
@@ -1593,7 +1594,7 @@ const AirtableClone = () => {
               onUpdateFilter={handleUpdateTextFilter}
               filterType="TEXT"
               buttonLabel="Filter Text"
-              disabled={disableSortAndFilter || isAddingManyRows}
+              disabled={isAddingManyRows}
             />
             <FilterComponent
               columns={base.columns.filter((c: Column) => c.type === "NUMBER")}
@@ -1603,7 +1604,7 @@ const AirtableClone = () => {
               onUpdateFilter={handleUpdateNumberFilter}
               filterType="NUMBER"
               buttonLabel="Filter Number"
-              disabled={disableSortAndFilter || isAddingManyRows}
+              disabled={isAddingManyRows}
             />
           </>
         )}{" "}
