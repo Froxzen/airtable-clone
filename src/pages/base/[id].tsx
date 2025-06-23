@@ -142,7 +142,7 @@ const AirtableClone = () => {
       baseWithTables.tables.length > 0 &&
       !activeTableId
     ) {
-      setActiveTableId(baseWithTables.tables[0]!.id);
+      setActiveTableId(baseWithTables.tables[0]?.id ?? null);
     }
   }, [baseWithTables, activeTableId]);
 
@@ -702,7 +702,7 @@ const AirtableClone = () => {
     onError: (_, __, context) => {
       if (context?.previousData) {
         const queryKey = {
-          tableId: activeTableId!,
+          tableId: activeTableId ?? "",
           limit: PAGE_SIZE,
           filters: allFilters,
           sortConfig: sorts,
@@ -717,7 +717,7 @@ const AirtableClone = () => {
   const updateRow = trpc.base.updateRow.useMutation({
     onMutate: async ({ rowId, data }) => {
       const queryKey = {
-        tableId: activeTableId!,
+        tableId: activeTableId ?? "",
         limit: PAGE_SIZE,
         filters: allFilters,
         sortConfig: sorts,
@@ -744,7 +744,7 @@ const AirtableClone = () => {
     },
     onSuccess: (updatedRow) => {
       const queryKey = {
-        tableId: activeTableId!,
+        tableId: activeTableId ?? "",
         limit: PAGE_SIZE,
         filters: allFilters,
         sortConfig: sorts,
@@ -774,7 +774,7 @@ const AirtableClone = () => {
     },
     onError: (_error, _variables, context) => {
       const queryKey = {
-        tableId: activeTableId!,
+        tableId: activeTableId ?? "",
         limit: PAGE_SIZE,
         filters: allFilters,
         sortConfig: sorts,
@@ -861,7 +861,7 @@ const AirtableClone = () => {
   const handleAddRow = () => {
     if (!base || !activeTableId) return;
     const emptyData = Object.fromEntries(
-      (base.columns as Column[]).map((col) => [col.id, ""])
+      base.columns.map((col) => [col.id, ""])
     );
     void addRow.mutateAsync({ tableId: activeTableId, data: emptyData });
   };
@@ -1114,7 +1114,7 @@ const AirtableClone = () => {
               : {},
         }));
         const queryKey = {
-          tableId: activeTableId!,
+          tableId: activeTableId ?? "",
           limit: PAGE_SIZE,
           filters: allFilters,
           sortConfig: sorts,
