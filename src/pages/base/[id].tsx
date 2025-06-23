@@ -22,7 +22,7 @@ import { Bars3BottomLeftIcon, HashtagIcon } from "@heroicons/react/24/outline";
 import Image from "next/image";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { type Prisma } from "@prisma/client";
-import { type Base, type Sort, type Column } from "~/types";
+import { type Sort, type Column } from "~/types";
 import { type Filter as FilterType } from "~/server/api/routers/base";
 import FilterComponent from "~/components/FilterComponent";
 import { flushSync } from "react-dom";
@@ -148,11 +148,10 @@ const AirtableClone = () => {
 
   // Fetch current table data
   const { data: currentTable } = trpc.base.getTableById.useQuery(
-    { tableId: activeTableId! },
+    activeTableId ? { tableId: activeTableId } : { tableId: "" },
     { enabled: !!activeTableId }
-  ) as { data: any };
+  ) as { data: { columns: Column[] } | undefined };
 
-  // For backward compatibility, use currentTable as base
   const base = currentTable;
 
   // Calculate base color (same logic as dashboard)
@@ -242,12 +241,19 @@ const AirtableClone = () => {
     hasNextPage,
     isFetchingNextPage,
   } = trpc.base.getRowsInfinite.useInfiniteQuery(
-    {
-      tableId: activeTableId!,
-      limit: PAGE_SIZE,
-      filters: allFilters,
-      sortConfig: sorts,
-    },
+    activeTableId
+      ? {
+          tableId: activeTableId,
+          limit: PAGE_SIZE,
+          filters: allFilters,
+          sortConfig: sorts,
+        }
+      : {
+          tableId: "",
+          limit: PAGE_SIZE,
+          filters: allFilters,
+          sortConfig: sorts,
+        },
     {
       enabled: !!activeTableId,
       getNextPageParam: (lastPage) => lastPage.nextCursor,
@@ -289,19 +295,34 @@ const AirtableClone = () => {
     );
   };
 
+  // Define a Row type for allRows and processedRows
+
+  type Row = {
+    id: string;
+    tableId: string;
+    data: Record<string, unknown>;
+  };
+
+  // Fix allRows type and mapping
   const allRows = useMemo(
     () =>
       infiniteData?.pages.flatMap((page) =>
-        page.rows.map((row) => ({
-          ...row,
-          data:
-            row.data && typeof row.data === "object" && !Array.isArray(row.data)
-              ? row.data
-              : {},
-        }))
+        page.rows.map(
+          (row: { id: string; tableId: string; data: unknown }) => ({
+            id: row.id,
+            tableId: row.tableId,
+            data:
+              row.data &&
+              typeof row.data === "object" &&
+              !Array.isArray(row.data)
+                ? (row.data as Record<string, unknown>)
+                : {},
+          })
+        )
       ) ?? [],
     [infiniteData]
-  ); // Helper function to highlight search matches
+  );
+  // Helper function to highlight search matches
   const highlightSearchMatch = (text: string, searchTerm: string) => {
     if (!searchTerm.trim()) return text;
 
@@ -423,8 +444,6 @@ const AirtableClone = () => {
 
     return rows;
   }, [allRows, allFilters, sorts, base?.columns, tempRowIds]);
-
-  type Row = (typeof allRows)[number];
 
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const rowVirtualizer = useVirtualizer({
@@ -842,7 +861,7 @@ const AirtableClone = () => {
   const handleAddRow = () => {
     if (!base || !activeTableId) return;
     const emptyData = Object.fromEntries(
-      base.columns.map((col: any) => [col.id, ""])
+      (base.columns as Column[]).map((col) => [col.id, ""])
     );
     void addRow.mutateAsync({ tableId: activeTableId, data: emptyData });
   };
