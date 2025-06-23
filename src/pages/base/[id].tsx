@@ -1407,6 +1407,7 @@ const AirtableClone = () => {
                   <button
                     key={table.id}
                     onClick={() => {
+                      if (isAddingManyRows) return; // Prevent switching tables while adding rows
                       setActiveTableId(table.id);
                       setSorts([]);
                       setTextFilters([]);
@@ -1424,7 +1425,10 @@ const AirtableClone = () => {
                       activeTableId === table.id
                         ? "bg-white bg-opacity-20 text-white"
                         : "text-white hover:bg-white hover:bg-opacity-10"
+                    } ${
+                      isAddingManyRows ? "cursor-not-allowed opacity-60" : ""
                     }`}
+                    disabled={isAddingManyRows}
                   >
                     {table.name.length > 30
                       ? table.name.slice(0, 30) + "..."
@@ -1444,6 +1448,12 @@ const AirtableClone = () => {
                     }
                   }}
                   className="flex items-center gap-1 rounded px-3 py-1 text-sm font-medium text-white hover:bg-white hover:bg-opacity-10"
+                  disabled={isAddingManyRows}
+                  style={
+                    isAddingManyRows
+                      ? { cursor: "not-allowed", opacity: 0.6 }
+                      : {}
+                  }
                 >
                   <Plus className="h-4 w-4" />
                   Add Table
