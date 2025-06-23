@@ -1367,7 +1367,9 @@ const AirtableClone = () => {
                         : "text-white hover:bg-white hover:bg-opacity-10"
                     }`}
                   >
-                    {table.name}
+                    {table.name.length > 30
+                      ? table.name.slice(0, 30) + "..."
+                      : table.name}
                   </button>
                 ))}
                 {/* Add Table Button */}
@@ -1705,39 +1707,17 @@ const AirtableClone = () => {
                             <HashtagIcon className="h-4 w-4 flex-shrink-0 text-gray-500" />
                           )}
                           <div className="flex flex-1 items-center">
-                            {editingColumn === col.id ? (
-                              <input
-                                autoFocus
-                                className="w-full rounded border border-blue-500 bg-white px-2 py-1 text-xs"
-                                value={editingColumnName}
-                                onChange={(e) =>
-                                  setEditingColumnName(e.target.value)
-                                }
-                                onBlur={(e) =>
-                                  handleColumnNameChange(col.id, e.target.value)
-                                }
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") {
-                                    handleColumnNameChange(
-                                      col.id,
-                                      e.currentTarget.value
-                                    );
-                                  } else if (e.key === "Escape") {
-                                    setEditingColumn(null);
-                                  }
-                                }}
-                              />
-                            ) : (
-                              <span
-                                className="flex-1 cursor-pointer truncate rounded px-1 py-0.5 hover:bg-gray-100"
-                                onClick={() =>
-                                  handleColumnClick(col.id, col.name)
-                                }
-                                title={col.name}
-                              >
-                                {col.name}
-                              </span>
-                            )}
+                            <span
+                              className="block max-w-[170px] truncate rounded px-1 py-0.5"
+                              title={
+                                col.name.length > 10 ? col.name : undefined
+                              }
+                              style={{ verticalAlign: "middle" }}
+                            >
+                              {col.name.length > 10
+                                ? col.name.slice(0, 10) + "…"
+                                : col.name}
+                            </span>
                           </div>
                           <ChevronDown className="h-3 w-3 text-gray-400" />
                         </div>
@@ -1970,17 +1950,33 @@ const AirtableClone = () => {
       {showAddTableModal && (
         <div
           className="absolute z-20 w-64 rounded-md border border-gray-200 bg-white p-4 shadow-lg"
-          style={{
-            top: addTableButtonRef.current
-              ? addTableButtonRef.current.getBoundingClientRect().bottom +
-                window.scrollY
-              : 0,
-            left: addTableButtonRef.current
-              ? addTableButtonRef.current.getBoundingClientRect().right +
-                window.scrollX -
-                256 // 256px = w-64
-              : 0,
-          }}
+          style={(() => {
+            if (
+              baseWithTables?.tables?.length &&
+              baseWithTables.tables.length <= 4
+            ) {
+              // Center below the button
+              const btn = addTableButtonRef.current;
+              if (btn) {
+                const rect = btn.getBoundingClientRect();
+                return {
+                  top: rect.bottom + window.scrollY,
+                  left: rect.left + rect.width / 2 + window.scrollX - 128, // 128px = w-64/2
+                };
+              }
+            } else {
+              // Default: right-aligned
+              const btn = addTableButtonRef.current;
+              if (btn) {
+                const rect = btn.getBoundingClientRect();
+                return {
+                  top: rect.bottom + window.scrollY,
+                  left: rect.right + window.scrollX - 256, // 256px = w-64
+                };
+              }
+            }
+            return {};
+          })()}
         >
           <div className="mb-2 text-lg font-semibold text-gray-800">
             Add Table
