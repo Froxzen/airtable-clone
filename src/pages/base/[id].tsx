@@ -365,52 +365,7 @@ const AirtableClone = () => {
     let rows = allRows;
 
     // Remove search filter from here - we'll handle highlighting instead
-
-    // Apply column filters
-    if (allFilters.length > 0) {
-      rows = rows.filter((row) => {
-        // Always show temporary rows during their display period
-        if (tempRowIds.has(row.id)) return true;
-
-        return allFilters.every((filter) => {
-          const columnId = filter.columnId;
-          const columnType = filter.columnType;
-          const condition = filter.condition;
-          const value = filter.value as unknown;
-          const cellValue = row.data[columnId];
-
-          if (columnType === "TEXT") {
-            const str = String(cellValue ?? "").toLowerCase();
-            const filterVal = String(value ?? "").toLowerCase();
-            if (condition === "contains") return str.includes(filterVal);
-            if (condition === "notContains") return !str.includes(filterVal);
-            if (condition === "equals") return str === filterVal;
-            if (condition === "notEquals") return str !== filterVal;
-            if (condition === "isEmpty") return !str;
-            if (condition === "isNotEmpty") return !!str;
-          } else if (columnType === "NUMBER") {
-            const filterNum = Number(value);
-
-            // If filter value is not a valid number, skip this filter
-            if (isNaN(filterNum)) return true;
-
-            // Convert cell value to number, treat empty/null as 0
-            const cellNum =
-              cellValue === null || cellValue === undefined || cellValue === ""
-                ? 0
-                : Number(cellValue);
-
-            // If cell value is not a valid number, treat as 0
-            const finalCellNum = isNaN(cellNum) ? 0 : cellNum;
-
-            if (condition === "gt") return finalCellNum > filterNum;
-            if (condition === "lt") return finalCellNum < filterNum;
-          }
-
-          return true;
-        });
-      });
-    } // Apply sorting
+    // Fixed sorting section - replace your sorting logic with this:
     if (sorts.length > 0) {
       rows = [...rows].sort((a, b) => {
         // Keep temporary rows at the end during their display period
@@ -423,27 +378,48 @@ const AirtableClone = () => {
           const aVal = a.data[columnId];
           const bVal = b.data[columnId];
 
-          const column = base?.columns.find((c: Column) => c.id === columnId);
+          const column = base?.columns.find((c) => c.id === columnId);
 
           let comparison = 0;
 
           if (column?.type === "NUMBER") {
-            const aNum =
-              aVal === null || aVal === undefined || aVal === ""
-                ? -Infinity
-                : Number(aVal);
-            const bNum =
-              bVal === null || bVal === undefined || bVal === ""
-                ? -Infinity
-                : Number(bVal);
-            if (!isNaN(aNum) && !isNaN(bNum)) {
-              comparison = aNum - bNum;
+            // Handle null/undefined/empty values properly
+            const aIsEmpty = aVal === null || aVal === undefined || aVal === "";
+            const bIsEmpty = bVal === null || bVal === undefined || bVal === "";
+
+            // If both are empty, they're equal
+            if (aIsEmpty && bIsEmpty) {
+              comparison = 0;
+            }
+            // Empty values go to the end (treated as larger)
+            else if (aIsEmpty && !bIsEmpty) {
+              comparison = 1;
+            } else if (!aIsEmpty && bIsEmpty) {
+              comparison = -1;
+            }
+            // Both have values, compare as numbers
+            else {
+              const aNum = Number(aVal);
+              const bNum = Number(bVal);
+
+              // Handle NaN cases
+              if (isNaN(aNum) && isNaN(bNum)) {
+                comparison = 0;
+              } else if (isNaN(aNum)) {
+                comparison = 1;
+              } else if (isNaN(bNum)) {
+                comparison = -1;
+              } else {
+                comparison = aNum - bNum;
+              }
             }
           } else {
+            // Text sorting
             const aStr = (aVal ?? "").toString().toLowerCase();
             const bStr = (bVal ?? "").toString().toLowerCase();
             if (aStr < bStr) comparison = -1;
-            if (aStr > bStr) comparison = 1;
+            else if (aStr > bStr) comparison = 1;
+            else comparison = 0;
           }
 
           if (comparison !== 0) {
@@ -452,6 +428,54 @@ const AirtableClone = () => {
         }
         return 0;
       });
+
+      // Apply column filters
+      if (allFilters.length > 0) {
+        rows = rows.filter((row) => {
+          // Always show temporary rows during their display period
+          if (tempRowIds.has(row.id)) return true;
+
+          return allFilters.every((filter) => {
+            const columnId = filter.columnId;
+            const columnType = filter.columnType;
+            const condition = filter.condition;
+            const value = filter.value as unknown;
+            const cellValue = row.data[columnId];
+
+            if (columnType === "TEXT") {
+              const str = String(cellValue ?? "").toLowerCase();
+              const filterVal = String(value ?? "").toLowerCase();
+              if (condition === "contains") return str.includes(filterVal);
+              if (condition === "notContains") return !str.includes(filterVal);
+              if (condition === "equals") return str === filterVal;
+              if (condition === "notEquals") return str !== filterVal;
+              if (condition === "isEmpty") return !str;
+              if (condition === "isNotEmpty") return !!str;
+            } else if (columnType === "NUMBER") {
+              const filterNum = Number(value);
+
+              // If filter value is not a valid number, skip this filter
+              if (isNaN(filterNum)) return true;
+
+              // Convert cell value to number, treat empty/null as 0
+              const cellNum =
+                cellValue === null ||
+                cellValue === undefined ||
+                cellValue === ""
+                  ? 0
+                  : Number(cellValue);
+
+              // If cell value is not a valid number, treat as 0
+              const finalCellNum = isNaN(cellNum) ? 0 : cellNum;
+
+              if (condition === "gt") return finalCellNum > filterNum;
+              if (condition === "lt") return finalCellNum < filterNum;
+            }
+
+            return true;
+          });
+        });
+      } // Apply sorting
     }
 
     return rows;
@@ -1190,7 +1214,7 @@ const AirtableClone = () => {
           addManyRows(
             {
               tableId: activeTableId!,
-              count: 5000,
+              count: 100,
             },
             {
               onSuccess: () => {
