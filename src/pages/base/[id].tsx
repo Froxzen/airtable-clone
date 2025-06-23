@@ -1212,7 +1212,7 @@ const AirtableClone = () => {
           addManyRows(
             {
               tableId: activeTableId!,
-              count: 100,
+              count: 5000,
             },
             {
               onSuccess: () => {
