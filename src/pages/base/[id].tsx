@@ -232,7 +232,7 @@ const AirtableClone = () => {
   const isFilterActive = allFilters.length > 0;
   const isClearActive = isSortActive || isFilterActive;
 
-  const PAGE_SIZE = 2000; // Optimized for fast scrolling - loads more data per request
+  const PAGE_SIZE = 500; // Optimized for fast scrolling - loads more data per request
   const [showAddColumnPopup, setShowAddColumnPopup] = useState(false);
   const addColumnButtonRef = useRef<HTMLButtonElement>(null);
   const addColumnPopupRef = useRef<HTMLDivElement>(null);
@@ -867,7 +867,6 @@ const AirtableClone = () => {
         setShowAddTableModal(false);
         setNewTableName("");
       }
-      
     }
     document.addEventListener("pointerdown", handleClick);
     return () => document.removeEventListener("pointerdown", handleClick);
@@ -1152,8 +1151,6 @@ const AirtableClone = () => {
           sortConfig: sorts,
         };
 
-        const previousRowCount = allRows.length;
-
         flushSync(() => {
           utils.base.getRowsInfinite.setInfiniteData(queryKey, (old) => {
             if (!old) {
@@ -1181,10 +1178,7 @@ const AirtableClone = () => {
             };
           });
         });
-
-        rowVirtualizer.scrollToIndex(previousRowCount, {
-          align: "start",
-        });
+        // Do NOT scroll the view after adding rows
       },
       onError: (error) => {
         console.error("Failed to add rows:", error);
@@ -1455,8 +1449,9 @@ const AirtableClone = () => {
               isSortActive
                 ? "bg-white text-gray-700"
                 : "bg-white text-gray-600 hover:bg-gray-100"
-            }`}
+            } disabled:cursor-not-allowed disabled:opacity-50`}
             type="button"
+            disabled={isAddingManyRows}
           >
             <SortAsc className="h-4 w-4" />
             Sort
@@ -1586,6 +1581,7 @@ const AirtableClone = () => {
               onUpdateFilter={handleUpdateTextFilter}
               filterType="TEXT"
               buttonLabel="Filter Text"
+              disabled={isAddingManyRows}
             />
             <FilterComponent
               columns={base.columns.filter((c: Column) => c.type === "NUMBER")}
@@ -1595,6 +1591,7 @@ const AirtableClone = () => {
               onUpdateFilter={handleUpdateNumberFilter}
               filterType="NUMBER"
               buttonLabel="Filter Number"
+              disabled={isAddingManyRows}
             />
           </>
         )}{" "}
@@ -1604,7 +1601,7 @@ const AirtableClone = () => {
               ? "cursor-pointer bg-red-100 text-red-600 hover:bg-red-200"
               : "cursor-not-allowed bg-gray-100 text-gray-400"
           }`}
-          disabled={!isClearActive}
+          disabled={!isClearActive || isAddingManyRows}
           onClick={() => {
             setSorts([]);
             setTextFilters([]);
@@ -1629,6 +1626,7 @@ const AirtableClone = () => {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="rounded border border-gray-300 px-3 py-1 text-sm text-gray-700 focus:border-purple-400 focus:outline-none"
+            disabled={isAddingManyRows}
           />
           <span className="absolute right-2 top-2 text-gray-400">
             <Search className="h-4 w-4" />
@@ -2002,7 +2000,7 @@ const AirtableClone = () => {
                 const rect = btn.getBoundingClientRect();
                 return {
                   top: rect.bottom + window.scrollY,
-                  left: rect.left + rect.width / 2 + window.scrollX - 128, // 128px = w-64/2
+                  left: rect.left + rect.width / 2 + window.scrollX - 128,
                 };
               }
             } else {
@@ -2012,7 +2010,7 @@ const AirtableClone = () => {
                 const rect = btn.getBoundingClientRect();
                 return {
                   top: rect.bottom + window.scrollY,
-                  left: rect.right + window.scrollX - 256, // 256px = w-64
+                  left: rect.right + window.scrollX - 256,
                 };
               }
             }
@@ -2042,6 +2040,7 @@ const AirtableClone = () => {
             <button
               className="rounded bg-gray-100 px-3 py-1 text-sm text-gray-700 hover:bg-gray-200"
               onClick={() => {
+                setShowAddTableModal(false);
                 setNewTableName("");
               }}
             >
@@ -2077,10 +2076,10 @@ const AirtableClone = () => {
         }
         .table-heading-scrollbar::-webkit-scrollbar {
           height: 4px;
-         
+
           background: transparent;
         }
-               .table-heading-scrollbar::-webkit-scrollbar-thumb {
+        .table-heading-scrollbar::-webkit-scrollbar-thumb {
           background: #bbb;
           border-radius: 2px;
         }

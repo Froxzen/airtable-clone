@@ -11,6 +11,7 @@ interface FilterProps {
   onUpdateFilter: (filter: Filter) => void;
   filterType: "TEXT" | "NUMBER";
   buttonLabel: string;
+  disabled?: boolean;
 }
 
 const TEXT_CONDITIONS = [
@@ -35,6 +36,7 @@ const FilterComponent: React.FC<FilterProps> = ({
   onUpdateFilter,
   filterType,
   buttonLabel,
+  disabled = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -79,8 +81,14 @@ const FilterComponent: React.FC<FilterProps> = ({
     <div className="relative">
       <button
         ref={buttonRef}
-        onClick={() => setIsOpen((v) => !v)}
-        className="flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-gray-600 shadow hover:bg-gray-100"
+        onClick={() => !disabled && setIsOpen((v) => !v)}
+        className={`flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-gray-600 shadow hover:bg-gray-100${
+          disabled
+            ? " pointer-events-none opacity-50 disabled:cursor-not-allowed disabled:opacity-50"
+            : ""
+        }`}
+        disabled={disabled}
+        type="button"
       >
         {buttonLabel}
       </button>
