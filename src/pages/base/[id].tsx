@@ -359,15 +359,15 @@ const AirtableClone = () => {
   };
 
   // Single computed variable that handles all filtering, sorting, and searching
+  // Single computed variable that handles all filtering, sorting, and searching
   const processedRows = useMemo(() => {
     if (!allRows.length) return [];
 
     let rows = allRows;
 
-    // Remove search filter from here - we'll handle highlighting instead
-    // Fixed sorting section - replace your sorting logic with this:
+    // Apply sorting if there are sorts
     if (sorts.length > 0) {
-      rows = [...rows].sort((a, b) => {
+      rows = rows.sort((a, b) => {
         // Keep temporary rows at the end during their display period
         if (tempRowIds.has(a.id) && !tempRowIds.has(b.id)) return 1;
         if (!tempRowIds.has(a.id) && tempRowIds.has(b.id)) return -1;
@@ -428,54 +428,52 @@ const AirtableClone = () => {
         }
         return 0;
       });
+    }
 
-      // Apply column filters
-      if (allFilters.length > 0) {
-        rows = rows.filter((row) => {
-          // Always show temporary rows during their display period
-          if (tempRowIds.has(row.id)) return true;
+    // Apply column filters (moved outside of the sorting block)
+    if (allFilters.length > 0) {
+      rows = rows.filter((row) => {
+        // Always show temporary rows during their display period
+        if (tempRowIds.has(row.id)) return true;
 
-          return allFilters.every((filter) => {
-            const columnId = filter.columnId;
-            const columnType = filter.columnType;
-            const condition = filter.condition;
-            const value = filter.value as unknown;
-            const cellValue = row.data[columnId];
+        return allFilters.every((filter) => {
+          const columnId = filter.columnId;
+          const columnType = filter.columnType;
+          const condition = filter.condition;
+          const value = filter.value as unknown;
+          const cellValue = row.data[columnId];
 
-            if (columnType === "TEXT") {
-              const str = String(cellValue ?? "").toLowerCase();
-              const filterVal = String(value ?? "").toLowerCase();
-              if (condition === "contains") return str.includes(filterVal);
-              if (condition === "notContains") return !str.includes(filterVal);
-              if (condition === "equals") return str === filterVal;
-              if (condition === "notEquals") return str !== filterVal;
-              if (condition === "isEmpty") return !str;
-              if (condition === "isNotEmpty") return !!str;
-            } else if (columnType === "NUMBER") {
-              const filterNum = Number(value);
+          if (columnType === "TEXT") {
+            const str = String(cellValue ?? "").toLowerCase();
+            const filterVal = String(value ?? "").toLowerCase();
+            if (condition === "contains") return str.includes(filterVal);
+            if (condition === "notContains") return !str.includes(filterVal);
+            if (condition === "equals") return str === filterVal;
+            if (condition === "notEquals") return str !== filterVal;
+            if (condition === "isEmpty") return !str;
+            if (condition === "isNotEmpty") return !!str;
+          } else if (columnType === "NUMBER") {
+            const filterNum = Number(value);
 
-              // If filter value is not a valid number, skip this filter
-              if (isNaN(filterNum)) return true;
+            // If filter value is not a valid number, skip this filter
+            if (isNaN(filterNum)) return true;
 
-              // Convert cell value to number, treat empty/null as 0
-              const cellNum =
-                cellValue === null ||
-                cellValue === undefined ||
-                cellValue === ""
-                  ? 0
-                  : Number(cellValue);
+            // Convert cell value to number, treat empty/null as 0
+            const cellNum =
+              cellValue === null || cellValue === undefined || cellValue === ""
+                ? 0
+                : Number(cellValue);
 
-              // If cell value is not a valid number, treat as 0
-              const finalCellNum = isNaN(cellNum) ? 0 : cellNum;
+            // If cell value is not a valid number, treat as 0
+            const finalCellNum = isNaN(cellNum) ? 0 : cellNum;
 
-              if (condition === "gt") return finalCellNum > filterNum;
-              if (condition === "lt") return finalCellNum < filterNum;
-            }
+            if (condition === "gt") return finalCellNum > filterNum;
+            if (condition === "lt") return finalCellNum < filterNum;
+          }
 
-            return true;
-          });
+          return true;
         });
-      } // Apply sorting
+      });
     }
 
     return rows;
@@ -1650,6 +1648,9 @@ const AirtableClone = () => {
               localStorage.removeItem(`numberFilters_${baseId}`);
               localStorage.removeItem(`sorts_${baseId}`);
             }
+            if (processedRows.length > 500) {
+              window.location.reload();
+            }
           }}
           title="Clear sorting and filters"
           type="button"
@@ -2102,6 +2103,38 @@ const AirtableClone = () => {
           </div>
         </div>
       )}
+      <style jsx global>{`
+        .table-tabs-scrollbar::-webkit-scrollbar {
+          height: 6px;
+          background: transparent;
+        }
+        .table-tabs-scrollbar::-webkit-scrollbar-thumb {
+          background: #fff;
+          border-radius: 3px;
+        }
+        .table-tabs-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .table-tabs-scrollbar {
+          scrollbar-color: #fff transparent;
+          scrollbar-width: thin;
+        }
+        .table-heading-scrollbar::-webkit-scrollbar {
+          height: 4px;
+          background: transparent;
+        }
+        .table-heading-scrollbar::-webkit-scrollbar-thumb {
+          background: #bbb;
+          border-radius: 2px;
+        }
+        .table-heading-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .table-heading-scrollbar {
+          scrollbar-color: #bbb transparent;
+          scrollbar-width: thin;
+        }
+      `}</style>
     </div>
   );
 };
