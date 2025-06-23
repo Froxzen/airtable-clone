@@ -83,13 +83,9 @@ const Dashboard: NextPage = () => {
                 onClick={() => setShowModal(false)}
               >
                 Cancel
-              </button>{" "}
+              </button>
               <button
-                className={`rounded px-4 py-2 text-white hover:bg-blue-700 ${
-                  createBase.isLoading
-                    ? "cursor-not-allowed bg-blue-600 opacity-50"
-                    : "bg-blue-600"
-                }`}
+                className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
                 onClick={handleCreateBase}
                 disabled={!baseName.trim() || createBase.isLoading}
               >
@@ -194,10 +190,10 @@ const Dashboard: NextPage = () => {
           </div>
         </div>
 
-        {/* Recent Bases Section */}
+        {/* Your Bases Section */}
         <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
           <div className="border-b border-gray-200 px-6 py-4">
-            <h2 className="text-lg font-medium text-gray-900">Recent Bases</h2>
+            <h2 className="text-lg font-medium text-gray-900">Your Bases</h2>
           </div>
           <div className="p-6">
             {!bases || bases.length === 0 ? (

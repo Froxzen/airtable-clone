@@ -1276,7 +1276,7 @@ const AirtableClone = () => {
           />
           <div className="flex items-center space-x-1">
             <span className="text-xl font-bold">
-              {base?.name ?? "Untitled Base"}
+              {baseWithTables?.name ?? "Untitled Base"}
             </span>
           </div>
         </div>
@@ -1670,7 +1670,7 @@ const AirtableClone = () => {
               <table className="w-full min-w-max table-auto border-separate border-spacing-0">
                 {/* Table Header */}
                 <thead>
-                  <tr className="flex">
+                  <tr className="table-heading-scrollbar flex">
                     <th className="sticky left-0 top-0 z-20 flex h-10 w-12 flex-shrink-0 items-center justify-center border-b border-r border-gray-200 bg-gray-50 text-center text-xs font-medium text-gray-500">
                       #
                     </th>
@@ -1714,6 +1714,7 @@ const AirtableClone = () => {
                                 onClick={() =>
                                   handleColumnClick(col.id, col.name)
                                 }
+                                title={col.name}
                               >
                                 {col.name}
                               </span>
@@ -2017,6 +2018,21 @@ const AirtableClone = () => {
         }
         .table-tabs-scrollbar {
           scrollbar-color: #fff transparent;
+          scrollbar-width: thin;
+        }
+        .table-heading-scrollbar::-webkit-scrollbar {
+          height: 4px;
+          background: transparent;
+        }
+        .table-heading-scrollbar::-webkit-scrollbar-thumb {
+          background: #bbb;
+          border-radius: 2px;
+        }
+        .table-heading-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .table-heading-scrollbar {
+          scrollbar-color: #bbb transparent;
           scrollbar-width: thin;
         }
       `}</style>
