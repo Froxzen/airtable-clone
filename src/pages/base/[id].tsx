@@ -1739,10 +1739,12 @@ const AirtableClone = () => {
                             <td
                               key={col.id}
                               className={`relative flex h-10 w-48 flex-shrink-0 cursor-pointer items-center border-b border-r border-gray-200 px-3 ${
-                                isSelected || isEditing
+                                cellMatchesSearch(value, searchTerm)
+                                  ? isSelected || isEditing
+                                    ? "bg-yellow-200 shadow-[inset_0_0_0_3px_#3b82f6]"
+                                    : "bg-yellow-200"
+                                  : isSelected || isEditing
                                   ? "bg-white shadow-[inset_0_0_0_3px_#3b82f6]"
-                                  : cellMatchesSearch(value, searchTerm)
-                                  ? "bg-yellow-200"
                                   : ""
                               }`}
                               onClick={() => handleCellClick(rowIdx, colIdx)}
@@ -1753,7 +1755,7 @@ const AirtableClone = () => {
                               {isEditing ? (
                                 <input
                                   disabled={isTempRow}
-                                  className="absolute inset-0 h-full w-full border-none bg-white px-3 py-0 text-sm outline-none"
+                                  className="absolute inset-0 h-full w-full border-none bg-transparent px-3 py-0 text-sm outline-none"
                                   autoFocus
                                   value={value}
                                   onChange={(e) =>
