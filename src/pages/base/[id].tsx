@@ -2036,44 +2036,19 @@ const AirtableClone = () => {
 
       {showAddTableModal && (
         // =============================
-        // Add Table Popup
+        // Add Table Fullscreen Modal
         // =============================
-        <div
-          ref={addTablePopupRef}
-          className="absolute z-20 w-64 rounded-md border border-gray-200 bg-white p-4 shadow-lg"
-          style={(() => {
-            if (
-              baseWithTables?.tables?.length &&
-              baseWithTables.tables.length <= 4
-            ) {
-              // Center below the button
-              const btn = addTableButtonRef.current;
-              if (btn) {
-                const { bottom, left, width } = btn.getBoundingClientRect();
-                return {
-                  top: bottom + window.scrollY,
-                  left: left + width / 2 + window.scrollX - 64, // Center the popup
-                };
-              }
-            } else {
-              // Default position
-              return {
-                top: 100,
-                left: 100,
-              };
-            }
-          })()}
-        >
-          <div className="text-sm font-medium text-gray-800">
-            Add a new table
-          </div>
-          <div className="mt-2">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-20">
+          <div className="w-full max-w-sm rounded-xl border border-gray-200 bg-white p-6 shadow-xl">
+            <div className="mb-4 text-lg font-semibold text-gray-900">
+              Create Table
+            </div>
             <input
               type="text"
               value={newTableName}
               onChange={(e) => setNewTableName(e.target.value)}
               placeholder="Table name"
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-purple-500 focus:outline-none"
+              className="mb-6 w-full rounded border border-gray-400 px-4 py-2 text-base text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none"
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === "Enter" && newTableName.trim()) {
@@ -2082,24 +2057,25 @@ const AirtableClone = () => {
                 }
               }}
             />
-          </div>
-          <div className="mt-4 flex justify-end gap-2">
-            <button
-              onClick={() => setShowAddTableModal(false)}
-              className="rounded bg-gray-100 px-3 py-1 text-sm text-gray-700 hover:bg-gray-200"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={() => {
-                if (newTableName.trim()) {
-                  addTable.mutate({ name: newTableName.trim(), baseId });
-                }
-              }}
-              className="rounded bg-purple-600 px-3 py-1 text-sm text-white hover:bg-purple-700"
-            >
-              Add Table
-            </button>
+            <div className="flex justify-end gap-4">
+              <button
+                onClick={() => setShowAddTableModal(false)}
+                className="rounded px-2 py-1 text-base text-gray-700 hover:bg-gray-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (newTableName.trim()) {
+                    addTable.mutate({ name: newTableName.trim(), baseId });
+                  }
+                }}
+                className="rounded bg-blue-600 px-6 py-2 text-base font-medium text-white hover:bg-blue-700 disabled:bg-blue-300"
+                disabled={!newTableName.trim()}
+              >
+                Create
+              </button>
+            </div>
           </div>
         </div>
       )}
