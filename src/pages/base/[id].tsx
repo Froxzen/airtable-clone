@@ -45,9 +45,8 @@ const AirtableClone = () => {
     row: number;
     col: number;
   } | null>(null);
-  const [editingColumn, setEditingColumn] = useState<string | null>(null);
+
   const [newColumnName, setNewColumnName] = useState("");
-  const [editingColumnName, setEditingColumnName] = useState("");
 
   const { data: session } = useSession();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -424,7 +423,7 @@ const AirtableClone = () => {
           const aVal = a.data[columnId];
           const bVal = b.data[columnId];
 
-          const column = base?.columns.find((c: any) => c.id === columnId);
+          const column = base?.columns.find((c: Column) => c.id === columnId);
 
           let comparison = 0;
 
@@ -1122,33 +1121,6 @@ const AirtableClone = () => {
   // Handle ending edit mode
   const handleEditEnd = () => {
     handleEditEndAndNavigate("none");
-  };
-
-  // Handle column editing
-  const handleColumnClick = (columnId: string, currentName: string) => {
-    // Don't edit if it's a temporary column (still being created)
-    if (columnId.startsWith("temp-col-")) return;
-    setEditingColumn(columnId);
-    setEditingColumnName(currentName);
-  };
-
-  const handleColumnNameChange = (columnId: string, newName: string) => {
-    // Don't update if it's a temporary column (still being created)
-    if (columnId.startsWith("temp-col-")) {
-      setEditingColumn(null);
-      return;
-    }
-
-    if (
-      newName.trim() &&
-      newName !== base?.columns.find((col: Column) => col.id === columnId)?.name
-    ) {
-      void updateColumn.mutateAsync({
-        columnId,
-        name: newName.trim(),
-      });
-    }
-    setEditingColumn(null);
   };
 
   // Handle sign out
