@@ -27,9 +27,10 @@ import { type Filter as FilterType } from "~/server/api/routers/base";
 import FilterComponent from "~/components/FilterComponent";
 import { flushSync } from "react-dom";
 
-// Define proper types for the data structures
-
 const AirtableClone = () => {
+  // =============================
+  // State and Refs
+  // =============================
   const router = useRouter();
   const baseId = router.query.id as string;
   const [activeTableId, setActiveTableId] = useState<string | null>(null);
@@ -65,7 +66,9 @@ const AirtableClone = () => {
 
   const [sorts, setSorts] = useState<Sort[]>([]);
 
-  // Load persisted filters and sorts on mount
+  // =============================
+  // Effects: Load/Persist Filters, Sorts, Table Selection
+  // =============================
   useEffect(() => {
     if (!baseId) return;
 
@@ -131,6 +134,7 @@ const AirtableClone = () => {
   const [animatingOutRowIds, setAnimatingOutRowIds] = useState<Set<string>>(
     new Set()
   );
+
   // Fetch base with all tables
   const { data: baseWithTables } = trpc.base.getById.useQuery(
     { id: baseId },
@@ -262,6 +266,10 @@ const AirtableClone = () => {
     }
   );
 
+  // =============================
+  // Data Fetching: Base, Table, Rows
+  // =============================
+
   const handleAddTextFilter = (filter: Omit<FilterType, "id">) => {
     setTextFilters((prev) => [
       ...prev,
@@ -295,6 +303,10 @@ const AirtableClone = () => {
       prev.map((f) => (f.id === filter.id ? filter : f))
     );
   };
+
+  // =============================
+  // Memoized/Derived Data
+  // =============================
 
   // Define a Row type for allRows and processedRows
 
@@ -446,6 +458,10 @@ const AirtableClone = () => {
     return rows;
   }, [allRows, allFilters, sorts, base?.columns, tempRowIds]);
 
+  // =============================
+  // Virtualization Setup
+  // =============================
+
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const rowVirtualizer = useVirtualizer({
     count: processedRows.length + 1, // +1 for placeholder row
@@ -475,6 +491,10 @@ const AirtableClone = () => {
     isFetchingNextPage,
     fetchNextPage,
   ]);
+  // =============================
+  // Handlers: Filters, Sorts, Search, Columns, Rows
+  // =============================
+
   const addColumn = trpc.base.addColumn.useMutation({
     onMutate: async ({ name, order }) => {
       if (!activeTableId) return;
@@ -788,6 +808,10 @@ const AirtableClone = () => {
       }
     },
   });
+
+  // =============================
+  // Mutations: Add/Update Table, Column, Row, Many Rows
+  // =============================
 
   // Memoize views to prevent unnecessary re-renders
   const views = useMemo(
@@ -1217,6 +1241,10 @@ const AirtableClone = () => {
     void handleAddManyRows();
   };
 
+  // =============================
+  // Utility Functions
+  // =============================
+
   // Helper function to check if a row matches the current filters, sorts, and search
   const checkIfRowMatches = (
     row: Row,
@@ -1302,9 +1330,14 @@ const AirtableClone = () => {
       </div>
     );
   }
+  // =============================
+  // Render: Main Component Output
+  // =============================
   return (
     <div className="flex h-screen flex-col bg-white">
-      {/* Main Header */}
+      {/* =============================
+          Main Header
+      ============================= */}
       <div
         className={`flex h-16 items-center px-6 py-4 text-sm text-white ${
           getBaseColor ?? "bg-purple-500"
@@ -1356,7 +1389,9 @@ const AirtableClone = () => {
           )}
         </div>
       </div>
-      {/* Secondary Header / Actions */}
+      {/* =============================
+          Secondary Header / Actions
+      ============================= */}
       <div
         className={`flex h-12 items-center px-4 text-sm text-white ${
           getSecondaryBaseColor ?? "bg-purple-600"
@@ -1420,7 +1455,9 @@ const AirtableClone = () => {
           </div>
         </div>
       </div>
-      {/* Controls Bar: Sort, Filter, Search */}
+      {/* =============================
+          Controls Bar: Sort, Filter, Search
+      ============================= */}
       <div className="flex items-center gap-4 border-b border-gray-200 bg-purple-50 px-4 py-3">
         {" "}
         <button
@@ -1634,7 +1671,9 @@ const AirtableClone = () => {
         </div>
       </div>
       <div className="flex flex-1">
-        {/* Left Sidebar: Views & Create */}
+        {/* =============================
+            Left Sidebar: Views & Create
+        ============================= */}
         <div className="w-64 flex-shrink-0 border-r border-gray-200 bg-gray-50 p-3">
           {/* Views Section */}
           <div className="mb-4">
@@ -1711,7 +1750,9 @@ const AirtableClone = () => {
             </div>
           </div>
         </div>
-        {/* Main Content: Table Grid */}
+        {/* =============================
+            Main Content: Table Grid
+        ============================= */}
         <div className="flex min-w-0 flex-1 flex-col">
           {/* Horizontally scrolling container */}
           <div
@@ -1923,14 +1964,22 @@ const AirtableClone = () => {
           </div>
         </div>
       </div>
-      {/* Bottom Status Bar */}
+      {/* =============================
+          Bottom Status Bar
+      ============================= */}
       <div className="flex h-8 items-center border-t border-gray-200 bg-white px-4">
         <span className="text-xs text-gray-500">
           {allRows.length} records
           {isFetchingNextPage ? " (loading more...)" : ""}
         </span>
       </div>
+      {/* =============================
+          Popups/Modals
+      ============================= */}
       {showAddColumnPopup && (
+        // =============================
+        // Add Column Popup
+        // =============================
         <div
           ref={addColumnPopupRef}
           className="absolute z-20 w-56 rounded-md border border-gray-200 bg-white p-2 shadow-lg"
@@ -1984,8 +2033,10 @@ const AirtableClone = () => {
         </div>
       )}
 
-      {/* Add Table Modal */}
       {showAddTableModal && (
+        // =============================
+        // Add Table Popup
+        // =============================
         <div
           ref={addTablePopupRef}
           className="absolute z-20 w-64 rounded-md border border-gray-200 bg-white p-4 shadow-lg"
@@ -1997,100 +2048,60 @@ const AirtableClone = () => {
               // Center below the button
               const btn = addTableButtonRef.current;
               if (btn) {
-                const rect = btn.getBoundingClientRect();
+                const { bottom, left, width } = btn.getBoundingClientRect();
                 return {
-                  top: rect.bottom + window.scrollY,
-                  left: rect.left + rect.width / 2 + window.scrollX - 128,
+                  top: bottom + window.scrollY,
+                  left: left + width / 2 + window.scrollX - 64, // Center the popup
                 };
               }
             } else {
-              // Default: right-aligned
-              const btn = addTableButtonRef.current;
-              if (btn) {
-                const rect = btn.getBoundingClientRect();
-                return {
-                  top: rect.bottom + window.scrollY,
-                  left: rect.right + window.scrollX - 256,
-                };
-              }
+              // Default position
+              return {
+                top: 100,
+                left: 100,
+              };
             }
-            return {};
           })()}
         >
-          <div className="mb-2 text-lg font-semibold text-gray-800">
-            Add Table
+          <div className="text-sm font-medium text-gray-800">
+            Add a new table
           </div>
-          <input
-            type="text"
-            value={newTableName}
-            onChange={(e) => setNewTableName(e.target.value)}
-            placeholder="Table name"
-            className="mb-3 w-full rounded border border-gray-300 px-2 py-1.5 text-sm text-gray-800 placeholder-gray-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
-            autoFocus
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && newTableName.trim()) {
-                addTable.mutate({ baseId, name: newTableName.trim() });
-              } else if (e.key === "Escape") {
-                setShowAddTableModal(false);
-                setNewTableName("");
-              }
-            }}
-          />
-          <div className="flex justify-end gap-2">
-            <button
-              className="rounded bg-gray-100 px-3 py-1 text-sm text-gray-700 hover:bg-gray-200"
-              onClick={() => {
-                setShowAddTableModal(false);
-                setNewTableName("");
+          <div className="mt-2">
+            <input
+              type="text"
+              value={newTableName}
+              onChange={(e) => setNewTableName(e.target.value)}
+              placeholder="Table name"
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-purple-500 focus:outline-none"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && newTableName.trim()) {
+                  e.preventDefault();
+                  addTable.mutate({ name: newTableName.trim(), baseId });
+                }
               }}
+            />
+          </div>
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              onClick={() => setShowAddTableModal(false)}
+              className="rounded bg-gray-100 px-3 py-1 text-sm text-gray-700 hover:bg-gray-200"
             >
               Cancel
             </button>
             <button
-              className="rounded bg-purple-600 px-3 py-1 text-sm text-white hover:bg-purple-700 disabled:opacity-50"
-              disabled={!newTableName.trim() || addTable.isLoading}
-              onClick={() =>
-                addTable.mutate({ baseId, name: newTableName.trim() })
-              }
+              onClick={() => {
+                if (newTableName.trim()) {
+                  addTable.mutate({ name: newTableName.trim(), baseId });
+                }
+              }}
+              className="rounded bg-purple-600 px-3 py-1 text-sm text-white hover:bg-purple-700"
             >
-              {addTable.isLoading ? "Adding..." : "Add"}
+              Add Table
             </button>
           </div>
         </div>
       )}
-      <style jsx global>{`
-        .table-tabs-scrollbar::-webkit-scrollbar {
-          height: 6px;
-          background: transparent;
-        }
-        .table-tabs-scrollbar::-webkit-scrollbar-thumb {
-          background: #fff;
-          border-radius: 3px;
-        }
-        .table-tabs-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .table-tabs-scrollbar {
-          scrollbar-color: #fff transparent;
-          scrollbar-width: thin;
-        }
-        .table-heading-scrollbar::-webkit-scrollbar {
-          height: 4px;
-
-          background: transparent;
-        }
-        .table-heading-scrollbar::-webkit-scrollbar-thumb {
-          background: #bbb;
-          border-radius: 2px;
-        }
-        .table-heading-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .table-heading-scrollbar {
-          scrollbar-color: #bbb transparent;
-          scrollbar-width: thin;
-        }
-      `}</style>
     </div>
   );
 };
