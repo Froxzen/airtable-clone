@@ -9,7 +9,6 @@ import {
   Calendar,
   BarChart3,
   Clock,
-  List,
   GanttChart,
   FileText,
   ChevronDown,
@@ -949,17 +948,23 @@ const AirtableClone = () => {
 
   // --- Per-grid-view sorting/filtering state and logic ---
   // Type guards for backend data
-  const isSort = (obj: any): obj is Sort =>
-    obj &&
-    typeof obj === "object" &&
-    typeof obj.columnId === "string" &&
-    (obj.direction === "asc" || obj.direction === "desc");
-  const isFilter = (obj: any): obj is FilterType =>
-    obj &&
-    typeof obj === "object" &&
-    typeof obj.columnId === "string" &&
-    (obj.columnType === "TEXT" || obj.columnType === "NUMBER") &&
-    typeof obj.condition === "string";
+  const isSort = (obj: unknown): obj is Sort => {
+    if (!obj || typeof obj !== "object") return false;
+    const o = obj as Partial<Sort>;
+    return (
+      typeof o.columnId === "string" &&
+      (o.direction === "asc" || o.direction === "desc")
+    );
+  };
+  const isFilter = (obj: unknown): obj is FilterType => {
+    if (!obj || typeof obj !== "object") return false;
+    const o = obj as Partial<FilterType>;
+    return (
+      typeof o.columnId === "string" &&
+      (o.columnType === "TEXT" || o.columnType === "NUMBER") &&
+      typeof o.condition === "string"
+    );
+  };
 
   // Track last loaded grid view to prevent overwriting local sorts/filters
   const lastLoadedGridViewId = useRef<string | null>(null);
@@ -1964,7 +1969,7 @@ const AirtableClone = () => {
               >
                 <div className="flex items-center gap-2">
                   <Grid3X3 className="h-4 w-4" />
-                  <span>Grid view +</span>
+                  <span>Grid view</span>
                 </div>
                 <Plus className="h-4 w-4" />
               </div>
