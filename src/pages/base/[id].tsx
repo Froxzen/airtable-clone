@@ -1023,8 +1023,10 @@ const AirtableClone = () => {
     wrapperRef.current?.blur();
   };
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (!selectedCell || editingCell || !base) return;
+    if (!selectedCell || !base) return;
     const { row, col } = selectedCell;
+
+    if (editingCell) return; // Don't handle navigation if already editing
 
     switch (e.key) {
       case "ArrowRight":
@@ -1039,6 +1041,12 @@ const AirtableClone = () => {
         break;
       case "ArrowUp":
         if (row > 0) setSelectedCell({ row: row - 1, col });
+        break;
+      case "Tab":
+        e.preventDefault();
+        if (col < base.columns.length - 1) {
+          setSelectedCell({ row, col: col + 1 });
+        }
         break;
       case "Enter":
         if (e.shiftKey) {
@@ -1953,6 +1961,19 @@ const AirtableClone = () => {
                                     ) {
                                       e.preventDefault();
                                       handleEditEnd();
+                                    } else if (e.key === "Tab") {
+                                      e.preventDefault();
+                                      if (editingCell && base) {
+                                        const { row, col } = editingCell;
+                                        if (col < base.columns.length - 1) {
+                                          handleEditEndAndNavigate("none");
+                                          setSelectedCell({
+                                            row,
+                                            col: col + 1,
+                                          });
+                                          setEditingCell({ row, col: col + 1 });
+                                        }
+                                      }
                                     }
                                   }}
                                 />
