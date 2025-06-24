@@ -1227,9 +1227,18 @@ const AirtableClone = () => {
   };
 
   const handleCellDoubleClick = (rowIdx: number, colIdx: number) => {
+    const row = processedRows[rowIdx];
+    const col = base?.columns[colIdx];
+    if (!row || !col) return;
+    const value = getCellValue(row, col.id);
     setEditingCell({ row: rowIdx, col: colIdx });
     setSortingFrozen(true);
     wrapperRef.current?.blur();
+    // If value contains a newline, open expanded mode immediately
+    if (typeof value === "string" && value.includes("\n")) {
+      setExpandedCell({ row: rowIdx, col: colIdx });
+      setExpandedCellValue(value); // Preserve newlines
+    }
   };
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (!selectedCell || !base) return;
@@ -2173,12 +2182,10 @@ const AirtableClone = () => {
                                       setExpandedCellValue(e.target.value)
                                     }
                                     onBlur={() => {
-                                      const sanitized =
-                                        expandedCellValue.replace(/\n+/g, " ");
                                       handleInputChange(
                                         row.id,
                                         col.id,
-                                        sanitized
+                                        expandedCellValue // Save with newlines preserved
                                       );
                                       setExpandedCell(null);
                                       setEditingCell(null);
@@ -2199,15 +2206,10 @@ const AirtableClone = () => {
                                         e.key === "Tab"
                                       ) {
                                         e.preventDefault();
-                                        const sanitized =
-                                          expandedCellValue.replace(
-                                            /\n+/g,
-                                            " "
-                                          );
                                         handleInputChange(
                                           row.id,
                                           col.id,
-                                          sanitized
+                                          expandedCellValue // Save with newlines preserved
                                         );
                                         setExpandedCell(null);
                                         setEditingCell(null);
@@ -2263,8 +2265,10 @@ const AirtableClone = () => {
                                       if (e.key === "Enter") {
                                         e.preventDefault();
                                         // Store cursor position before switching
-                                        const input = e.target as HTMLInputElement;
-                                        const cursorPos = input.selectionStart ?? 0;
+                                        const input =
+                                          e.target as HTMLInputElement;
+                                        const cursorPos =
+                                          input.selectionStart ?? 0;
                                         const currentValue = input.value;
                                         const newValue =
                                           currentValue.slice(0, cursorPos) +
@@ -2275,7 +2279,7 @@ const AirtableClone = () => {
                                           row: rowIdx,
                                           col: colIdx,
                                         });
-                                        setExpandedCellValue(newValue);
+                                        setExpandedCellValue(newValue); // Preserve newlines
                                       } else if (e.key === "Escape") {
                                         e.preventDefault();
                                         handleEditEnd();
