@@ -181,7 +181,7 @@ const SortComponent: React.FC<SortComponentProps> = ({
                 <div className="w-4"></div>
               </div>
             )}
-            {sorts.length > 0 && sorts.length < 3 && (
+            {sorts.length > 0 && sorts.length < columns.length && (
               <button
                 onClick={() =>
                   setSorts((prev) => [
