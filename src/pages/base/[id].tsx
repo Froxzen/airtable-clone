@@ -1132,6 +1132,15 @@ const AirtableClone = () => {
     if (!name) {
       return;
     }
+    // Prevent duplicate column names (case-insensitive)
+    if (
+      base.columns.some(
+        (col) => col.name.trim().toLowerCase() === name.toLowerCase()
+      )
+    ) {
+      alert("A column with this name already exists.");
+      return;
+    }
 
     void addColumn.mutateAsync({
       tableId: activeTableId,
@@ -1708,7 +1717,6 @@ const AirtableClone = () => {
           )}
         </button>
         {/* Filter/Sort Indicators */}
-        
         <div className="relative inline-block">
           {sorts && sorts.length > 0 ? (
             <button

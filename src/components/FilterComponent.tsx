@@ -73,6 +73,22 @@ const FilterComponent: React.FC<FilterProps> = ({
     };
   }, []);
 
+  // Remove incomplete filters automatically, but only if the popup isn't open
+  useEffect(() => {
+    if (!isOpen) {
+      const incompleteFilters = filters.filter((f) => {
+        if (f.condition === "isEmpty" || f.condition === "isNotEmpty")
+          return false;
+        return String(f.value ?? "").trim() === "";
+      });
+      if (incompleteFilters.length > 0) {
+        incompleteFilters.forEach((f) => onRemoveFilter(f.id));
+      }
+    }
+    // Only run when filters or isOpen change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters, isOpen]);
+
   const relevantFilters = filters.filter((f) =>
     relevantColumns.some((c) => c.id === f.columnId)
   );
@@ -82,15 +98,73 @@ const FilterComponent: React.FC<FilterProps> = ({
       <button
         ref={buttonRef}
         onClick={() => !disabled && setIsOpen((v) => !v)}
-        className={`flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-gray-600 shadow hover:bg-gray-100${
-          disabled
-            ? " pointer-events-none opacity-50 disabled:cursor-not-allowed disabled:opacity-50"
-            : ""
-        }`}
+        // Highlighting and text logic for filtered state
+        className={(() => {
+          // Only count filters where all values are inputted
+          const validFilters = filters.filter((f) => {
+            if (f.condition === "isEmpty" || f.condition === "isNotEmpty")
+              return true;
+            return String(f.value ?? "").trim() !== "";
+          });
+          // Unique column names only
+          const filterNames = Array.from(
+            new Set(
+              validFilters
+                .map((f) => columns.find((c) => c.id === f.columnId)?.name)
+                .filter(Boolean)
+            )
+          );
+          const isFiltered = filterNames.length > 0;
+          const isNameFilter = validFilters.some((f) => {
+            const col = columns.find((c) => c.id === f.columnId);
+            return col && col.name.toLowerCase() === "name";
+          });
+          let baseClass =
+            "flex items-center gap-1 rounded px-3 py-1 text-sm font-medium shadow ";
+          if (disabled)
+            baseClass +=
+              " pointer-events-none opacity-50 disabled:cursor-not-allowed disabled:opacity-50";
+          if (isFiltered && isNameFilter) {
+            baseClass += " border border-cyan-300 bg-cyan-100 text-cyan-900";
+          } else if (isFiltered) {
+            baseClass += " border border-green-300 bg-green-200 text-green-900";
+          } else {
+            baseClass += " bg-white text-gray-600 hover:bg-gray-100";
+          }
+          return baseClass;
+        })()}
         disabled={disabled}
         type="button"
+        style={{
+          maxWidth: 240,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
       >
-        {buttonLabel}
+        {(() => {
+          // Only count filters where all values are inputted
+          const validFilters = filters.filter((f) => {
+            if (f.condition === "isEmpty" || f.condition === "isNotEmpty")
+              return true;
+            return String(f.value ?? "").trim() !== "";
+          });
+          // Unique column names only
+          const filterNames = Array.from(
+            new Set(
+              validFilters
+                .map((f) => columns.find((c) => c.id === f.columnId)?.name)
+                .filter(Boolean)
+            )
+          );
+          if (filterNames.length > 0) {
+            let filterText = filterNames.join(", ");
+            if (filterText.length > 30)
+              filterText = filterText.slice(0, 30) + "...";
+            return `Filtered by ${filterText}`;
+          }
+          return buttonLabel;
+        })()}
       </button>
 
       {isOpen && (
