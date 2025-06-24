@@ -1690,7 +1690,6 @@ const AirtableClone = () => {
           Controls Bar: Sort, Filter, Search
       ============================= */}
       <div className="flex items-center gap-4 border-b border-gray-200 bg-purple-50 px-4 py-3">
-        {" "}
         <button
           onClick={handleAddManyRowsWrapper}
           disabled={isAddingManyRows}
@@ -1708,22 +1707,35 @@ const AirtableClone = () => {
             </>
           )}
         </button>
+        {/* Filter/Sort Indicators */}
+        
         <div className="relative inline-block">
-          {" "}
-          <button
-            ref={sortButtonRef}
-            onClick={() => setShowSort(!showSort)}
-            className={`flex items-center gap-1 rounded px-3 py-1 text-sm font-medium shadow ${
-              isSortActive
-                ? "bg-white text-gray-700"
-                : "bg-white text-gray-600 hover:bg-gray-100"
-            } disabled:cursor-not-allowed disabled:opacity-50`}
-            type="button"
-            disabled={isAddingManyRows}
-          >
-            <SortAsc className="h-4 w-4" />
-            Sort
-          </button>{" "}
+          {sorts && sorts.length > 0 ? (
+            <button
+              ref={sortButtonRef}
+              onClick={() => setShowSort(!showSort)}
+              className={
+                `flex items-center gap-1 rounded border border-yellow-300 bg-yellow-200 px-3 py-1 text-sm font-medium text-yellow-900 shadow` +
+                ` disabled:cursor-not-allowed disabled:opacity-50`
+              }
+              type="button"
+              disabled={isAddingManyRows}
+            >
+              <SortAsc className="h-4 w-4" />
+              Sorted by {sorts.length} field{sorts.length > 1 ? "s" : ""}
+            </button>
+          ) : (
+            <button
+              ref={sortButtonRef}
+              onClick={() => setShowSort(!showSort)}
+              className={`flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-gray-600 shadow hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50`}
+              type="button"
+              disabled={isAddingManyRows}
+            >
+              <SortAsc className="h-4 w-4" />
+              Sort
+            </button>
+          )}
           {/* Sort Popup */}
           {showSort && (
             <div
@@ -2021,34 +2033,49 @@ const AirtableClone = () => {
                     <th className="sticky left-0 top-0 z-20 flex h-10 w-12 flex-shrink-0 items-center justify-center border-b border-r border-gray-200 bg-gray-50 text-center text-xs font-medium text-gray-500">
                       #
                     </th>
-                    {base?.columns?.map((col: Column) => (
-                      <th
-                        key={col.id}
-                        className="sticky top-0 z-10 h-10 w-48 flex-shrink-0 border-b border-r border-gray-200 bg-gray-50 px-3 text-left text-xs font-medium text-gray-700"
-                      >
-                        <div className="flex h-full items-center space-x-2">
-                          {col.type === "TEXT" ? (
-                            <Bars3BottomLeftIcon className="h-4 w-4 flex-shrink-0 text-gray-500" />
-                          ) : (
-                            <HashtagIcon className="h-4 w-4 flex-shrink-0 text-gray-500" />
-                          )}
-                          <div className="flex flex-1 items-center">
-                            <span
-                              className="block max-w-[170px] truncate rounded px-1 py-0.5"
-                              title={
-                                col.name.length > 10 ? col.name : undefined
-                              }
-                              style={{ verticalAlign: "middle" }}
-                            >
-                              {col.name.length > 10
-                                ? col.name.slice(0, 10) + "…"
-                                : col.name}
-                            </span>
+                    {base?.columns?.map((col: Column) => {
+                      const isFiltered =
+                        (textFilters &&
+                          textFilters.some((f) => f.columnId === col.id)) ||
+                        (numberFilters &&
+                          numberFilters.some((f) => f.columnId === col.id));
+                      const isSorted =
+                        sorts && sorts.some((s) => s.columnId === col.id);
+                      return (
+                        <th
+                          key={col.id}
+                          className={`sticky top-0 z-10 h-10 w-48 flex-shrink-0 border-b border-r border-gray-200 bg-gray-50 px-3 text-left text-xs font-medium text-gray-700 ${
+                            isFiltered
+                              ? "bg-green-50 ring-2 ring-green-400"
+                              : isSorted
+                              ? "bg-orange-50 ring-2 ring-orange-300"
+                              : ""
+                          }`}
+                        >
+                          <div className="flex h-full items-center space-x-2">
+                            {col.type === "TEXT" ? (
+                              <Bars3BottomLeftIcon className="h-4 w-4 flex-shrink-0 text-gray-500" />
+                            ) : (
+                              <HashtagIcon className="h-4 w-4 flex-shrink-0 text-gray-500" />
+                            )}
+                            <div className="flex flex-1 items-center">
+                              <span
+                                className="block max-w-[170px] truncate rounded px-1 py-0.5"
+                                title={
+                                  col.name.length > 10 ? col.name : undefined
+                                }
+                                style={{ verticalAlign: "middle" }}
+                              >
+                                {col.name.length > 10
+                                  ? col.name.slice(0, 10) + "…"
+                                  : col.name}
+                              </span>
+                            </div>
+                            <ChevronDown className="h-3 w-3 text-gray-400" />
                           </div>
-                          <ChevronDown className="h-3 w-3 text-gray-400" />
-                        </div>
-                      </th>
-                    ))}{" "}
+                        </th>
+                      );
+                    })}{" "}
                     <th className="w-12 flex-shrink-0 border-b border-l border-r border-gray-200 bg-gray-50 p-0">
                       <button
                         ref={addColumnButtonRef}
