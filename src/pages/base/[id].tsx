@@ -46,6 +46,13 @@ const AirtableClone = () => {
     col: number;
   } | null>(null);
 
+  // State for expanded cell editing
+  const [expandedCell, setExpandedCell] = useState<{
+    row: number;
+    col: number;
+  } | null>(null);
+  const [expandedCellValue, setExpandedCellValue] = useState<string>("");
+
   const [newColumnName, setNewColumnName] = useState("");
 
   const { data: session } = useSession();
@@ -982,8 +989,12 @@ const AirtableClone = () => {
     const backendFilters = Array.isArray(selectedView.filter)
       ? (selectedView.filter.filter(isFilter) as unknown as FilterType[])
       : [];
-    const backendTextFilters = backendFilters.filter((f) => f.columnType === "TEXT");
-    const backendNumberFilters = backendFilters.filter((f) => f.columnType === "NUMBER");
+    const backendTextFilters = backendFilters.filter(
+      (f) => f.columnType === "TEXT"
+    );
+    const backendNumberFilters = backendFilters.filter(
+      (f) => f.columnType === "NUMBER"
+    );
     setSorts(backendSorts);
     setTextFilters(backendTextFilters);
     setNumberFilters(backendNumberFilters);
@@ -2083,100 +2094,228 @@ const AirtableClone = () => {
                             <td
                               key={col.id}
                               className={`h-10 w-48 flex-shrink-0 border-b border-gray-200 group-hover:bg-gray-50 ${
-                              index === base.columns.length - 1 ? "border-r" : ""
-                            }`}
-                          ></td>
-                        ))}
+                                index === base.columns.length - 1
+                                  ? "border-r"
+                                  : ""
+                              }`}
+                            ></td>
+                          ))}
+                        </tr>
+                      );
+                    }
+                    const row = processedRows[rowIdx];
+                    if (!row || !base) return null;
+                    const isAnimatingOut = animatingOutRowIds.has(row.id);
+                    const isTemporary = tempRowIds.has(row.id);
+                    return (
+                      <tr
+                        key={row.id}
+                        className={`flex transition-all duration-300 hover:bg-gray-50 ${
+                          isAnimatingOut
+                            ? "translate-y-[-20px] transform opacity-0"
+                            : "translate-y-0 transform opacity-100"
+                        } ${isTemporary ? "border-green-200 bg-green-50" : ""}`}
+                        style={{
+                          position: "absolute",
+                          top: 0,
+                          left: 0,
+                          width: "max-content",
+                          height: `${virtualRow.size}px`,
+                          transform: `translateY(${virtualRow.start}px)`,
+                        }}
+                      >
+                        <td className="sticky left-0 z-10 flex h-10 w-12 flex-shrink-0 items-center justify-center border-b border-r border-gray-200 bg-gray-50 text-center text-xs text-gray-500">
+                          {rowIdx + 1}
+                        </td>
+                        {base.columns.map((col: Column, colIdx: number) => {
+                          const isSelected =
+                            selectedCell?.row === rowIdx &&
+                            selectedCell?.col === colIdx;
+                          const isEditing =
+                            editingCell?.row === rowIdx &&
+                            editingCell?.col === colIdx;
+                          const value = getCellValue(row, col.id);
+                          const isTempRow = row.id.startsWith("temp-row-");
+                          // Track if this cell is in expanded (textarea) mode
+                          const isExpandedEditing =
+                            isEditing &&
+                            expandedCell &&
+                            expandedCell.row === rowIdx &&
+                            expandedCell.col === colIdx;
+
+                          return (
+                            <td
+                              key={col.id}
+                              className={`relative flex h-10 w-48 flex-shrink-0 cursor-pointer items-center border-b border-r border-gray-200 px-3 ${
+                                cellMatchesSearch(value, searchTerm)
+                                  ? isSelected || isEditing
+                                    ? "bg-yellow-200 shadow-[inset_0_0_0_3px_#3b82f6]"
+                                    : "bg-yellow-200"
+                                  : isSelected || isEditing
+                                  ? "bg-white shadow-[inset_0_0_0_3px_#3b82f6]"
+                                  : ""
+                              }`}
+                              onClick={() => handleCellClick(rowIdx, colIdx)}
+                              onDoubleClick={() =>
+                                handleCellDoubleClick(rowIdx, colIdx)
+                              }
+                              data-cell-row={rowIdx}
+                              data-cell-col={colIdx}
+                            >
+                              {isEditing ? (
+                                isExpandedEditing ? (
+                                  <textarea
+                                    disabled={isTempRow}
+                                    className="resize-vertical absolute left-0 top-0 z-[100] h-auto min-h-[40px] w-full border-2 border-blue-400 bg-white px-3 py-2 text-sm shadow-2xl focus:outline-none"
+                                    autoFocus
+                                    value={expandedCellValue}
+                                    onChange={(e) =>
+                                      setExpandedCellValue(e.target.value)
+                                    }
+                                    onBlur={() => {
+                                      const sanitized =
+                                        expandedCellValue.replace(/\n+/g, " ");
+                                      handleInputChange(
+                                        row.id,
+                                        col.id,
+                                        sanitized
+                                      );
+                                      setExpandedCell(null);
+                                      setEditingCell(null);
+                                      setExpandedCellValue("");
+                                      if (sortingUnfreezeTimeout.current)
+                                        clearTimeout(
+                                          sortingUnfreezeTimeout.current
+                                        );
+                                      sortingUnfreezeTimeout.current =
+                                        setTimeout(
+                                          () => setSortingFrozen(false),
+                                          1000
+                                        );
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (
+                                        e.key === "Escape" ||
+                                        e.key === "Tab"
+                                      ) {
+                                        e.preventDefault();
+                                        const sanitized =
+                                          expandedCellValue.replace(
+                                            /\n+/g,
+                                            " "
+                                          );
+                                        handleInputChange(
+                                          row.id,
+                                          col.id,
+                                          sanitized
+                                        );
+                                        setExpandedCell(null);
+                                        setEditingCell(null);
+                                        setExpandedCellValue("");
+                                        if (sortingUnfreezeTimeout.current)
+                                          clearTimeout(
+                                            sortingUnfreezeTimeout.current
+                                          );
+                                        sortingUnfreezeTimeout.current =
+                                          setTimeout(
+                                            () => setSortingFrozen(false),
+                                            1000
+                                          );
+                                      }
+                                      // Let Enter insert newlines natively
+                                    }}
+                                    ref={(textarea) => {
+                                      if (textarea && isExpandedEditing) {
+                                        // Set cursor to end when textarea is first rendered
+                                        setTimeout(() => {
+                                          const length = textarea.value.length;
+                                          textarea.setSelectionRange(
+                                            length,
+                                            length
+                                          );
+                                        }, 0);
+                                      }
+                                    }}
+                                    style={{
+                                      minHeight: 40,
+                                      width: "100%",
+                                      zIndex: 100,
+                                      boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+                                      background: "white",
+                                      resize: "vertical",
+                                    }}
+                                  />
+                                ) : (
+                                  <input
+                                    disabled={isTempRow}
+                                    className="absolute inset-0 h-full w-full border-none bg-transparent px-3 py-0 text-sm outline-none"
+                                    autoFocus
+                                    value={value}
+                                    onChange={(e) =>
+                                      handleInputChange(
+                                        row.id,
+                                        col.id,
+                                        e.target.value
+                                      )
+                                    }
+                                    onBlur={handleEditEnd}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        e.preventDefault();
+                                        // Store cursor position before switching
+                                        const input = e.target as HTMLInputElement;
+                                        const cursorPos = input.selectionStart ?? 0;
+                                        const currentValue = input.value;
+                                        const newValue =
+                                          currentValue.slice(0, cursorPos) +
+                                          "\n" +
+                                          currentValue.slice(cursorPos);
+
+                                        setExpandedCell({
+                                          row: rowIdx,
+                                          col: colIdx,
+                                        });
+                                        setExpandedCellValue(newValue);
+                                      } else if (e.key === "Escape") {
+                                        e.preventDefault();
+                                        handleEditEnd();
+                                      } else if (e.key === "Tab") {
+                                        e.preventDefault();
+                                        if (editingCell && base) {
+                                          const { row, col } = editingCell;
+                                          if (col < base.columns.length - 1) {
+                                            handleEditEndAndNavigate("none");
+                                            setSelectedCell({
+                                              row,
+                                              col: col + 1,
+                                            });
+                                            setEditingCell({
+                                              row,
+                                              col: col + 1,
+                                            });
+                                          }
+                                        }
+                                      }
+                                    }}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    onClick={(e) => e.stopPropagation()}
+                                    data-cell-row={rowIdx}
+                                    data-cell-col={colIdx}
+                                  />
+                                )
+                              ) : (
+                                <div className="truncate text-sm text-gray-700">
+                                  {searchTerm.trim()
+                                    ? highlightSearchMatch(value, searchTerm)
+                                    : value}
+                                </div>
+                              )}
+                            </td>
+                          );
+                        })}
                       </tr>
                     );
-                  }
-                  const row = processedRows[rowIdx];
-                  if (!row || !base) return null;
-                  const isAnimatingOut = animatingOutRowIds.has(row.id);
-                  const isTemporary = tempRowIds.has(row.id);
-                  return (
-                    <tr
-                      key={row.id}
-                      className={`flex transition-all duration-300 hover:bg-gray-50 ${
-                        isAnimatingOut
-                          ? "translate-y-[-20px] transform opacity-0"
-                          : "translate-y-0 transform opacity-100"
-                      } ${isTemporary ? "border-green-200 bg-green-50" : ""}`}
-                      style={{
-                        position: "absolute",
-                        top: 0,
-                        left: 0,
-                        width: "max-content",
-                        height: `${virtualRow.size}px`,
-                        transform: `translateY(${virtualRow.start}px)`,
-                      }}
-                    >
-                      <td className="sticky left-0 z-10 flex h-10 w-12 flex-shrink-0 items-center justify-center border-b border-r border-gray-200 bg-gray-50 text-center text-xs text-gray-500">
-                        {rowIdx + 1}
-                      </td>
-                      {base.columns.map((col: Column, colIdx: number) => {
-                        const isSelected =
-                          selectedCell?.row === rowIdx && selectedCell?.col === colIdx;
-                        const isEditing =
-                          editingCell?.row === rowIdx && editingCell?.col === colIdx;
-                        const value = getCellValue(row, col.id);
-                        const isTempRow = row.id.startsWith("temp-row-");
-                        return (
-                          <td
-                            key={col.id}
-                            className={`relative flex h-10 w-48 flex-shrink-0 cursor-pointer items-center border-b border-r border-gray-200 px-3 ${
-                              cellMatchesSearch(value, searchTerm)
-                                ? isSelected || isEditing
-                                  ? "bg-yellow-200 shadow-[inset_0_0_0_3px_#3b82f6]"
-                                  : "bg-yellow-200"
-                                : isSelected || isEditing
-                                ? "bg-white shadow-[inset_0_0_0_3px_#3b82f6]"
-                                : ""
-                            }`}
-                            onClick={() => handleCellClick(rowIdx, colIdx)}
-                            onDoubleClick={() => handleCellDoubleClick(rowIdx, colIdx)}
-                          >
-                            {isEditing ? (
-                              <input
-                                disabled={isTempRow}
-                                className="absolute inset-0 h-full w-full border-none bg-transparent px-3 py-0 text-sm outline-none"
-                                autoFocus
-                                value={value}
-                                onChange={(e) => handleInputChange(row.id, col.id, e.target.value)}
-                                onBlur={handleEditEnd}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter" || e.key === "Escape") {
-                                    e.preventDefault();
-                                    handleEditEnd();
-                                  } else if (e.key === "Tab") {
-                                    e.preventDefault();
-                                    if (editingCell && base) {
-                                      const { row, col } = editingCell;
-                                      if (col < base.columns.length - 1) {
-                                        handleEditEndAndNavigate("none");
-                                        setSelectedCell({
-                                          row,
-                                          col: col + 1,
-                                        });
-                                        setEditingCell({ row, col: col + 1 });
-                                      }
-                                    }
-                                  }
-                                }}
-                                onMouseDown={(e) => e.stopPropagation()}
-                                onClick={(e) => e.stopPropagation()}
-                              />
-                            ) : (
-                              <div className="truncate text-sm text-gray-700">
-                                {searchTerm.trim() ? highlightSearchMatch(value, searchTerm) : value}
-                              </div>
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  );
-                })}
+                  })}
                 </tbody>
               </table>
             </div>
@@ -2203,8 +2342,12 @@ const AirtableClone = () => {
           ref={addColumnPopupRef}
           className="absolute z-20 w-56 rounded-md border border-gray-200 bg-white p-2 shadow-lg"
           style={{
-            top: (addColumnButtonRef.current?.getBoundingClientRect().bottom ?? 0) + window.scrollY,
-            left: (addColumnButtonRef.current?.getBoundingClientRect().right ?? 0) + window.scrollX,
+            top:
+              (addColumnButtonRef.current?.getBoundingClientRect().bottom ??
+                0) + window.scrollY,
+            left:
+              (addColumnButtonRef.current?.getBoundingClientRect().right ?? 0) +
+              window.scrollX,
             transform: "translateX(-100%)",
           }}
         >
