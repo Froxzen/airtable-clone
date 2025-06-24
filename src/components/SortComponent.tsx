@@ -84,62 +84,71 @@ const SortComponent: React.FC<SortComponentProps> = ({
             Sort records in this view
           </div>
           <div className="space-y-2">
-            {sorts.map((sort, index) => (
-              <div
-                key={index}
-                className="grid grid-cols-[auto_1fr_1fr_auto] items-center gap-2"
-              >
-                <span className="text-sm text-gray-500">
-                  {index === 0 ? "Sort by" : "Then by"}
-                </span>
-                <select
-                  className="rounded border border-gray-300 bg-white px-2 py-1 text-sm shadow-sm focus:border-purple-500 focus:ring-purple-500"
-                  value={sort.columnId}
-                  onChange={(e) =>
-                    setSorts((prev) =>
-                      prev.map((s, i) =>
-                        i === index ? { ...s, columnId: e.target.value } : s
+            {sorts.map((sort, index) => {
+              // Only allow columns not already used by other sorts
+              const otherUsed = sorts
+                .filter((_, i) => i !== index)
+                .map((s) => s.columnId);
+              const selectableColumns = columns.filter(
+                (col) => !otherUsed.includes(col.id)
+              );
+              return (
+                <div
+                  key={index}
+                  className="grid grid-cols-[auto_1fr_1fr_auto] items-center gap-2"
+                >
+                  <span className="text-sm text-gray-500">
+                    {index === 0 ? "Sort by" : "Then by"}
+                  </span>
+                  <select
+                    className="rounded border border-gray-300 bg-white px-2 py-1 text-sm shadow-sm focus:border-purple-500 focus:ring-purple-500"
+                    value={sort.columnId}
+                    onChange={(e) =>
+                      setSorts((prev) =>
+                        prev.map((s, i) =>
+                          i === index ? { ...s, columnId: e.target.value } : s
+                        )
                       )
-                    )
-                  }
-                >
-                  <option value="">Select a column</option>
-                  {columns.map((col: Column) => (
-                    <option key={col.id} value={col.id}>
-                      {col.name}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  className="rounded border border-gray-300 bg-white px-2 py-1 text-sm shadow-sm focus:border-purple-500 focus:ring-purple-500"
-                  value={sort.direction}
-                  onChange={(e) =>
-                    setSorts((prev) =>
-                      prev.map((s, i) =>
-                        i === index
-                          ? {
-                              ...s,
-                              direction: e.target.value as "asc" | "desc",
-                            }
-                          : s
+                    }
+                  >
+                    <option value="">Select a column</option>
+                    {selectableColumns.map((col) => (
+                      <option key={col.id} value={col.id}>
+                        {col.name}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="rounded border border-gray-300 bg-white px-2 py-1 text-sm shadow-sm focus:border-purple-500 focus:ring-purple-500"
+                    value={sort.direction}
+                    onChange={(e) =>
+                      setSorts((prev) =>
+                        prev.map((s, i) =>
+                          i === index
+                            ? {
+                                ...s,
+                                direction: e.target.value as "asc" | "desc",
+                              }
+                            : s
+                        )
                       )
-                    )
-                  }
-                >
-                  <option value="">Select an order</option>
-                  <option value="asc">Ascending</option>
-                  <option value="desc">Descending</option>
-                </select>
-                <button
-                  onClick={() =>
-                    setSorts((prev) => prev.filter((_, i) => i !== index))
-                  }
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            ))}
+                    }
+                  >
+                    <option value="">Select an order</option>
+                    <option value="asc">Ascending</option>
+                    <option value="desc">Descending</option>
+                  </select>
+                  <button
+                    onClick={() =>
+                      setSorts((prev) => prev.filter((_, i) => i !== index))
+                    }
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              );
+            })}
             {sorts.length === 0 && (
               <div className="grid grid-cols-[auto_1fr_1fr_auto] items-center gap-2">
                 <span className="text-sm text-gray-500">Sort by</span>
