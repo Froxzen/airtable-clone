@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { type Column } from "~/types";
 import { type Filter } from "~/server/api/routers/base";
-import { X } from "lucide-react";
+import { X, Filter as FilterIcon } from "lucide-react";
 
 interface FilterProps {
   columns: Column[];
@@ -142,6 +142,7 @@ const FilterComponent: React.FC<FilterProps> = ({
           whiteSpace: "nowrap",
         }}
       >
+        <FilterIcon className="mr-1 inline-block h-4 w-4 align-middle text-gray-400" />
         {(() => {
           // Only count filters where all values are inputted
           const validFilters = filters.filter((f) => {

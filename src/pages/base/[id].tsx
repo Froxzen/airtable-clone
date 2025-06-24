@@ -15,8 +15,6 @@ import {
   Settings,
   Search,
   Trash2,
-  SortAsc,
-  X,
 } from "lucide-react";
 import { Bars3BottomLeftIcon, HashtagIcon } from "@heroicons/react/24/outline";
 import Image from "next/image";
