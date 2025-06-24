@@ -1835,7 +1835,7 @@ const AirtableClone = () => {
               >
                 <div className="flex items-center gap-2">
                   <Grid3X3 className="h-4 w-4" />
-                  <span>Grid view +</span>
+                  <span>Grid view</span>
                 </div>
                 <Plus className="h-4 w-4" />
               </div>
@@ -2050,6 +2050,8 @@ const AirtableClone = () => {
                                       }
                                     }
                                   }}
+                                  onMouseDown={(e) => e.stopPropagation()}
+                                  onClick={(e) => e.stopPropagation()}
                                 />
                               ) : (
                                 <div className="truncate text-sm text-gray-700">
