@@ -1249,11 +1249,81 @@ const AirtableClone = () => {
       setExpandedCellValue(value); // Preserve newlines
     }
   };
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+  const handleKeyDown = async (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (!selectedCell || !base) return;
     const { row, col } = selectedCell;
-
+  
     if (editingCell) return; // Don't handle navigation if already editing
+  
+    // Copy (Ctrl+C)
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
+      e.preventDefault();
+      const rowObj = processedRows[row];
+      const colObj = base.columns[col];
+      if (rowObj && colObj) {
+        const value = getCellValue(rowObj, colObj.id);
+        try {
+          await navigator.clipboard.writeText(value || "");
+          console.log("Copied:", value); // Debug log
+        } catch (error) {
+          console.error("Failed to copy:", error);
+        }
+      }
+      return;
+    }
+  
+    // Paste (Ctrl+V): Replace only the selected cell's value
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v") {
+      
+      e.preventDefault();
+      const rowObj = processedRows[row];
+      const colObj = base.columns[col];
+      
+      if (rowObj && colObj) {
+        
+        try {
+          const clipboardValue = await navigator.clipboard.readText();
+          console.log("Pasting:", clipboardValue); // Debug log
+          
+          // Clean up the clipboard value (remove extra newlines, etc.)
+          const cleanedValue = clipboardValue.trim();
+          
+          // Update the row data
+          const dataObj = rowObj.data ?? {};
+          const newData = { ...dataObj, [colObj.id]: cleanedValue };
+          
+          // Update local state immediately for responsiveness
+          setLocalCellValues((prev) => ({
+            ...prev,
+            [`${rowObj.id}-${colObj.id}`]: cleanedValue,
+          }));
+          
+          // Update the backend
+          try {
+            await updateRow.mutateAsync({ rowId: rowObj.id, data: newData });
+            console.log("Successfully updated row"); // Debug log
+          } catch (updateError) {
+            console.error("Failed to update row:", updateError);
+            // Revert local state on error
+            setLocalCellValues((prev) => {
+              const newPrev = { ...prev };
+              delete newPrev[`${rowObj.id}-${colObj.id}`];
+              return newPrev;
+            });
+          }
+        } catch (error) {
+          console.error("Failed to read clipboard:", error);
+          // Fallback: try to use the legacy clipboard API
+          try {
+            const clipboardValue = await navigator.clipboard.readText();
+            // Process as above...
+          } catch (fallbackError) {
+            console.error("Clipboard access failed entirely:", fallbackError);
+          }
+        }
+      }
+      return;
+    }
 
     switch (e.key) {
       case "ArrowRight":
