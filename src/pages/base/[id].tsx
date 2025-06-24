@@ -198,7 +198,10 @@ const AirtableClone = () => {
   const [newGridViewName, setNewGridViewName] = useState("");
   const addGridViewButtonRef = useRef<HTMLDivElement>(null);
   const addGridViewPopupRef = useRef<HTMLDivElement>(null);
-  const [addGridViewPopupPos, setAddGridViewPopupPos] = useState({ top: 0, left: 0 });
+  const [addGridViewPopupPos, setAddGridViewPopupPos] = useState({
+    top: 0,
+    left: 0,
+  });
 
   // Handler to show Add Grid View popup
   const handleShowAddGridViewPopup = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -215,6 +218,9 @@ const AirtableClone = () => {
           left: rect.right + window.scrollX,
         });
       }
+      // Prefill with 'Grid {number of grid views + 1}'
+      const nextNumber = (gridViewsData ? gridViewsData.length : 0) + 1;
+      setNewGridViewName(`Grid ${nextNumber}`);
       setShowAddGridViewPopup(true);
     }
   };
@@ -953,7 +959,7 @@ const AirtableClone = () => {
       { name: "Gallery", icon: BarChart3 },
       { name: "Kanban", icon: BarChart3 },
       { name: "Timeline", icon: Clock, badge: "Team" },
-      { name: "List", icon: List },
+      { name: "List", icon: FileText },
       { name: "Gantt", icon: GanttChart, badge: "Team" },
       { name: "New Section", badge: "Team" },
       { name: "Form", icon: FileText },
@@ -2250,37 +2256,36 @@ const AirtableClone = () => {
       {showAddGridViewPopup && (
         <div
           ref={addGridViewPopupRef}
-          className="z-50 absolute bg-white border border-gray-200 rounded shadow-lg p-4 w-72"
+          className="absolute z-50 w-72 rounded border border-gray-200 bg-white p-4 shadow-lg"
           style={{
             top: addGridViewPopupPos.top,
             left: addGridViewPopupPos.left,
             position: "absolute",
           }}
         >
-          <div className="mb-2 text-sm font-medium text-gray-700">Create new grid view</div>
           <input
             type="text"
-            className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-purple-400 focus:outline-none mb-3"
+            className="mb-3 w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
             placeholder="Grid view name"
             value={newGridViewName}
-            onChange={e => setNewGridViewName(e.target.value)}
+            onChange={(e) => setNewGridViewName(e.target.value)}
             autoFocus
           />
           <div className="flex justify-end gap-2">
             <button
-              className="px-3 py-1 rounded text-sm text-gray-600 hover:bg-gray-100"
+              className="rounded px-3 py-1 text-sm text-gray-600 hover:bg-gray-100"
               onClick={handleCancelAddGridView}
               type="button"
             >
               Cancel
             </button>
             <button
-              className="px-3 py-1 rounded text-sm text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50"
+              className="rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
               onClick={handleCreateGridView}
               disabled={!newGridViewName.trim()}
               type="button"
             >
-              Create
+              Create new view
             </button>
           </div>
         </div>
