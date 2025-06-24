@@ -1836,7 +1836,15 @@ const AirtableClone = () => {
               />
               <Settings className="absolute right-2 top-2 h-4 w-4 text-gray-400" />
             </div>
-            <div className="space-y-1">
+            {/* Scrollable grid views if 5 or more */}
+            <div
+              className={
+                gridViewsData && gridViewsData.length >= 5
+                  ? "space-y-1 max-h-36 overflow-y-auto pr-1 custom-scrollbar"
+                  : "space-y-1"
+              }
+              style={gridViewsData && gridViewsData.length >= 5 ? { WebkitOverflowScrolling: 'touch' } : {}}
+            >
               {/* Main Grid View (no plus, tick if selected) - always show */}
               <div
                 key={gridViewsData?.[0]?.id || "main-grid-view"}
@@ -2319,6 +2327,18 @@ const AirtableClone = () => {
         }
         .table-heading-scrollbar {
           scrollbar-color: #bbb transparent;
+          scrollbar-width: thin;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 8px;
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #e5e7eb;
+          border-radius: 4px;
+        }
+        .custom-scrollbar {
+          scrollbar-color: #e5e7eb transparent;
           scrollbar-width: thin;
         }
       `}</style>
