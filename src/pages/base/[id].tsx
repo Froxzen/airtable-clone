@@ -25,9 +25,9 @@ import { type Prisma } from "@prisma/client";
 import { type Sort, type Column } from "~/types";
 import { type Filter as FilterType } from "~/server/api/routers/base";
 import FilterComponent from "~/components/FilterComponent";
-import { flushSync } from "react-dom";
 import AddManyRowsButton from "../../components/AddManyRowsButton";
 import SortComponent from "../../components/SortComponent";
+import SearchBar from "../../components/SearchBar";
 
 const AirtableClone = () => {
   // =============================
@@ -1644,15 +1644,14 @@ const AirtableClone = () => {
       <div className="flex items-center gap-4 border-b border-gray-200 bg-purple-50 px-4 py-3">
         <AddManyRowsButton tableId={activeTableId} disabled={!base} />
         {/* Filter/Sort Indicators */}
-        
         <SortComponent
-            columns={base?.columns || []}
-            sorts={sorts}
-            setSorts={setSorts}
-            showSort={showSort}
-            setShowSort={setShowSort}
-            sortButtonRef={sortButtonRef}
-          />
+          columns={base?.columns || []}
+          sorts={sorts}
+          setSorts={setSorts}
+          showSort={showSort}
+          setShowSort={setShowSort}
+          sortButtonRef={sortButtonRef}
+        />
         {base && (
           <>
             <FilterComponent
@@ -1696,17 +1695,11 @@ const AirtableClone = () => {
           <Trash2 className="h-4 w-4" />
         </button>
         <div className="relative ml-auto">
-          <input
-            type="text"
-            placeholder="Find..."
+          <SearchBar
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="rounded border border-gray-300 px-3 py-1 text-sm text-gray-700 focus:border-purple-400 focus:outline-none"
-            disabled={false}
+            onChange={setSearchTerm}
+            className="w-64"
           />
-          <span className="absolute right-2 top-2 text-gray-400">
-            <Search className="h-4 w-4" />
-          </span>
         </div>
       </div>
       <div className="flex flex-1">
@@ -2089,6 +2082,7 @@ const AirtableClone = () => {
                                     onKeyDown={(e) => {
                                       if (e.key === "Enter") {
                                         e.preventDefault();
+
                                         // Store cursor position before switching
                                         const input =
                                           e.target as HTMLInputElement;
