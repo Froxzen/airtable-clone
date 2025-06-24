@@ -92,6 +92,7 @@ const SortComponent: React.FC<SortComponentProps> = ({
               const selectableColumns = columns.filter(
                 (col) => !otherUsed.includes(col.id)
               );
+              const isInitial = !sort.columnId;
               return (
                 <div
                   key={index}
@@ -118,9 +119,10 @@ const SortComponent: React.FC<SortComponentProps> = ({
                       </option>
                     ))}
                   </select>
+                  {/* Order select with dynamic labels and placeholder for unselected column */}
                   <select
                     className="rounded border border-gray-300 bg-white px-2 py-1 text-sm shadow-sm focus:border-purple-500 focus:ring-purple-500"
-                    value={sort.direction}
+                    value={isInitial ? "" : sort.direction}
                     onChange={(e) =>
                       setSorts((prev) =>
                         prev.map((s, i) =>
@@ -133,10 +135,24 @@ const SortComponent: React.FC<SortComponentProps> = ({
                         )
                       )
                     }
+                    disabled={isInitial}
                   >
-                    <option value="">Select an order</option>
-                    <option value="asc">Ascending</option>
-                    <option value="desc">Descending</option>
+                    {isInitial ? (
+                      <option value="">A → Z / 1 → 9</option>
+                    ) : (() => {
+                      const col = columns.find((c) => c.id === sort.columnId);
+                      if (col?.type === "NUMBER") {
+                        return [
+                          <option key="asc" value="asc">1 → 9</option>,
+                          <option key="desc" value="desc">9 → 1</option>,
+                        ];
+                      } else {
+                        return [
+                          <option key="asc" value="asc">A → Z</option>,
+                          <option key="desc" value="desc">Z → A</option>,
+                        ];
+                      }
+                    })()}
                   </select>
                   <button
                     onClick={() =>
@@ -170,13 +186,13 @@ const SortComponent: React.FC<SortComponentProps> = ({
                     </option>
                   ))}
                 </select>
+                {/* Order select with dynamic placeholder for first sort */}
                 <select
                   className="rounded border border-gray-300 bg-white px-2 py-1 text-sm shadow-sm focus:border-purple-500 focus:ring-purple-500"
+                  value=""
                   disabled
                 >
-                  <option value="">Select an order</option>
-                  <option value="asc">Ascending</option>
-                  <option value="desc">Descending</option>
+                  <option value="">A → Z / 1 → 9</option>
                 </select>
                 <div className="w-4"></div>
               </div>
@@ -186,7 +202,7 @@ const SortComponent: React.FC<SortComponentProps> = ({
                 onClick={() =>
                   setSorts((prev) => [
                     ...prev,
-                    { columnId: "", direction: "asc" },
+                    { columnId: "", direction: "asc" }, // direction will be ignored until column is selected
                   ])
                 }
                 className="text-sm text-purple-600 hover:text-purple-700"
