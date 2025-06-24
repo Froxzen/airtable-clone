@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { faker } from "@faker-js/faker";
-import { ColumnType, type Prisma } from "@prisma/client";
+import { ColumnType, Prisma } from "@prisma/client";
 
 const tableRowSchema = z.record(z.string());
 
@@ -58,6 +58,16 @@ export const baseRouter = createTRPCRouter({
         },
       });
 
+      // 2b. Create default grid view for the table
+      await ctx.prisma.gridView.create({
+        data: {
+          tableId: table.id,
+          name: "Grid view",
+          filter: Prisma.JsonNull,
+          sort: Prisma.JsonNull,
+        },
+      });
+
       // 3. Create columns
       const columns = await ctx.prisma.$transaction([
         ctx.prisma.column.create({
@@ -101,6 +111,16 @@ export const baseRouter = createTRPCRouter({
         data: {
           name: input.name,
           baseId: input.baseId,
+        },
+      });
+
+      // 1b. Create default grid view for the table
+      await ctx.prisma.gridView.create({
+        data: {
+          tableId: table.id,
+          name: "Grid view",
+          filter: Prisma.JsonNull,
+          sort: Prisma.JsonNull,
         },
       });
 
@@ -511,6 +531,85 @@ export const baseRouter = createTRPCRouter({
       return ctx.prisma.row.update({
         where: { id: input.rowId },
         data: { data: input.data },
+      });
+    }),
+  // --- GRID VIEW CRUD ---
+  getGridViews: protectedProcedure
+    .input(z.object({ tableId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return ctx.prisma.gridView.findMany({
+        where: { tableId: input.tableId },
+        orderBy: { createdAt: "asc" },
+      });
+    }),
+
+  createGridView: protectedProcedure
+    .input(
+      z.object({
+        tableId: z.string(),
+        name: z.string().min(1),
+        filter: filterSchema.optional().nullable(),
+        sort: sortSchema.optional().nullable(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Enforce only one of filter or sort
+      if (input.filter && input.sort) {
+        throw new Error(
+          "A grid view can have either a filter or a sort, not both."
+        );
+      }
+      return ctx.prisma.gridView.create({
+        data: {
+          tableId: input.tableId,
+          name: input.name,
+          filter: input.filter ? input.filter : Prisma.JsonNull,
+          sort: input.sort ? input.sort : Prisma.JsonNull,
+        },
+      });
+    }),
+
+  updateGridView: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        name: z.string().min(1).optional(),
+        filter: filterSchema.optional().nullable(),
+        sort: sortSchema.optional().nullable(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Enforce only one of filter or sort
+      if (input.filter && input.sort) {
+        throw new Error(
+          "A grid view can have either a filter or a sort, not both."
+        );
+      }
+      return ctx.prisma.gridView.update({
+        where: { id: input.id },
+        data: {
+          ...(input.name ? { name: input.name } : {}),
+          filter:
+            input.filter !== undefined
+              ? input.filter
+                ? input.filter
+                : Prisma.JsonNull
+              : undefined,
+          sort:
+            input.sort !== undefined
+              ? input.sort
+                ? input.sort
+                : Prisma.JsonNull
+              : undefined,
+        },
+      });
+    }),
+
+  deleteGridView: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.prisma.gridView.delete({
+        where: { id: input.id },
       });
     }),
 });

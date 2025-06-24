@@ -167,97 +167,61 @@ const AirtableClone = () => {
   type GridView = {
     id: string;
     name: string;
-    columns: Column[];
+    filter: any | null;
+    sort: any | null;
   };
 
-  const [gridViews, setGridViews] = useState<GridView[]>([]);
+  const {
+    data: gridViewsData,
+    refetch: refetchGridViews,
+    isLoading: isLoadingGridViews,
+  } = trpc.base.getGridViews.useQuery(
+    activeTableId ? { tableId: activeTableId } : { tableId: "" },
+    { enabled: !!activeTableId }
+  );
+  const createGridView = trpc.base.createGridView.useMutation({
+    onSuccess: () => refetchGridViews(),
+  });
+  const updateGridView = trpc.base.updateGridView.useMutation({
+    onSuccess: () => refetchGridViews(),
+  });
+  const deleteGridView = trpc.base.deleteGridView.useMutation({
+    onSuccess: () => refetchGridViews(),
+  });
+
   const [selectedGridViewId, setSelectedGridViewId] = useState<string | null>(
     null
   );
 
-  // Load grid views and selected view for the current table
+  // When grid views or table changes, select the first grid view by default
   useEffect(() => {
-    if (!activeTableId || !base) return;
-    const persisted = localStorage.getItem(`gridViews_${activeTableId}`);
-    let loadedViews: GridView[] = [];
-    if (persisted) {
-      try {
-        loadedViews = JSON.parse(persisted) as GridView[];
-      } catch (e) {
-        loadedViews = [];
-      }
+    if (!activeTableId || !gridViewsData || gridViewsData.length === 0) {
+      setSelectedGridViewId(null);
+      return;
     }
-    if (!loadedViews.length) {
-      // Initialize with main grid view if not present
-      loadedViews = [
-        {
-          id: `main-${activeTableId}`,
-          name: "Grid view",
-          columns: base.columns,
-        },
-      ];
-      localStorage.setItem(
-        `gridViews_${activeTableId}`,
-        JSON.stringify(loadedViews)
-      );
-    }
-    setGridViews(loadedViews);
-    // Load selected view for this table
-    const persistedSelected = localStorage.getItem(
-      `selectedGridViewId_${activeTableId}`
-    );
+    // If current selected is not in the list, select the first
     if (
-      persistedSelected &&
-      loadedViews.some((v) => v.id === persistedSelected)
+      !selectedGridViewId ||
+      !gridViewsData.some((v) => v.id === selectedGridViewId)
     ) {
-      setSelectedGridViewId(persistedSelected);
-    } else if (loadedViews[0]) {
-      setSelectedGridViewId(loadedViews[0].id);
-      localStorage.setItem(
-        `selectedGridViewId_${activeTableId}`,
-        loadedViews[0].id
-      );
+      if (gridViewsData[0]) setSelectedGridViewId(gridViewsData[0].id);
     }
-  }, [activeTableId, base]);
-
-  // Persist grid views and selected view per table
-  useEffect(() => {
-    if (!activeTableId) return;
-    localStorage.setItem(
-      `gridViews_${activeTableId}`,
-      JSON.stringify(gridViews)
-    );
-  }, [activeTableId, gridViews]);
-  useEffect(() => {
-    if (!activeTableId || !selectedGridViewId) return;
-    localStorage.setItem(
-      `selectedGridViewId_${activeTableId}`,
-      selectedGridViewId
-    );
-  }, [activeTableId, selectedGridViewId]);
+  }, [activeTableId, gridViewsData]);
 
   const handleAddGridView = () => {
-    if (!base || !activeTableId) return;
-    const newView: GridView = {
-      id: `grid-${Date.now()}`,
-      name: `Grid view ${gridViews.length}`,
-      columns: base.columns.map((col) => ({ ...col })),
-    };
-    const updatedViews = [...gridViews, newView];
-    setGridViews(updatedViews);
-    setSelectedGridViewId(newView.id);
-    localStorage.setItem(
-      `gridViews_${activeTableId}`,
-      JSON.stringify(updatedViews)
-    );
-    localStorage.setItem(`selectedGridViewId_${activeTableId}`, newView.id);
+    if (!activeTableId) return;
+    // Default is always 'Grid view', so next is 'Grid view 2', etc.
+    const nextNumber = (gridViewsData ? gridViewsData.length : 1) + 1;
+    createGridView.mutate({
+      tableId: activeTableId,
+      name: `Grid view ${nextNumber}`,
+      filter: null,
+      sort: null,
+    });
   };
 
   const handleSelectGridView = (id: string) => {
     setSelectedGridViewId(id);
-    if (activeTableId) {
-      localStorage.setItem(`selectedGridViewId_${activeTableId}`, id);
-    }
   };
 
   // Calculate base color (same logic as dashboard)
@@ -1812,26 +1776,27 @@ const AirtableClone = () => {
             <div className="space-y-1">
               {/* Main Grid View (no plus, tick if selected) - always show */}
               <div
-                key={gridViews[0]?.id || "main-grid-view"}
+                key={gridViewsData?.[0]?.id || "main-grid-view"}
                 className={`flex cursor-pointer items-center justify-between rounded px-2 py-1.5 text-sm ${
-                  selectedGridViewId === gridViews[0]?.id
+                  selectedGridViewId === gridViewsData?.[0]?.id
                     ? "bg-blue-100 font-semibold text-blue-700"
                     : "text-gray-700 hover:bg-gray-100"
                 }`}
                 onClick={() =>
-                  gridViews[0] && handleSelectGridView(gridViews[0].id)
+                  gridViewsData?.[0] &&
+                  handleSelectGridView(gridViewsData[0].id)
                 }
               >
                 <div className="flex items-center gap-2">
                   <Grid3X3 className="h-4 w-4" />
-                  <span>{gridViews[0]?.name || "Grid view"}</span>
+                  <span>{gridViewsData?.[0]?.name || "Grid view"}</span>
                 </div>
-                {selectedGridViewId === gridViews[0]?.id && (
+                {selectedGridViewId === gridViewsData?.[0]?.id && (
                   <Check className="h-4 w-4 text-blue-600" />
                 )}
               </div>
               {/* Additional Grid Views (clones) */}
-              {gridViews.slice(1).map((view) => (
+              {gridViewsData?.slice(1).map((view) => (
                 <div
                   key={view.id}
                   className={`flex cursor-pointer items-center justify-between rounded px-2 py-1.5 text-sm ${
