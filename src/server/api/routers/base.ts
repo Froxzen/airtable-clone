@@ -18,6 +18,10 @@ const sortSchema = z.object({
   direction: z.enum(["asc", "desc"]),
 });
 
+// Add array schemas for multiple sorts/filters
+const filterArraySchema = z.array(filterSchema);
+const sortArraySchema = z.array(sortSchema);
+
 export type Filter = z.infer<typeof filterSchema>;
 
 export const baseRouter = createTRPCRouter({
@@ -548,23 +552,17 @@ export const baseRouter = createTRPCRouter({
       z.object({
         tableId: z.string(),
         name: z.string().min(1),
-        filter: filterSchema.optional().nullable(),
-        sort: sortSchema.optional().nullable(),
+        filter: filterArraySchema.optional().nullable(),
+        sort: sortArraySchema.optional().nullable(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // Enforce only one of filter or sort
-      if (input.filter && input.sort) {
-        throw new Error(
-          "A grid view can have either a filter or a sort, not both."
-        );
-      }
       return ctx.prisma.gridView.create({
         data: {
           tableId: input.tableId,
           name: input.name,
-          filter: input.filter ? input.filter : Prisma.JsonNull,
-          sort: input.sort ? input.sort : Prisma.JsonNull,
+          filter: input.filter ?? [],
+          sort: input.sort ?? [],
         },
       });
     }),
@@ -574,33 +572,17 @@ export const baseRouter = createTRPCRouter({
       z.object({
         id: z.string(),
         name: z.string().min(1).optional(),
-        filter: filterSchema.optional().nullable(),
-        sort: sortSchema.optional().nullable(),
+        filter: filterArraySchema.optional().nullable(),
+        sort: sortArraySchema.optional().nullable(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // Enforce only one of filter or sort
-      if (input.filter && input.sort) {
-        throw new Error(
-          "A grid view can have either a filter or a sort, not both."
-        );
-      }
       return ctx.prisma.gridView.update({
         where: { id: input.id },
         data: {
           ...(input.name ? { name: input.name } : {}),
-          filter:
-            input.filter !== undefined
-              ? input.filter
-                ? input.filter
-                : Prisma.JsonNull
-              : undefined,
-          sort:
-            input.sort !== undefined
-              ? input.sort
-                ? input.sort
-                : Prisma.JsonNull
-              : undefined,
+          filter: input.filter ?? [],
+          sort: input.sort ?? [],
         },
       });
     }),

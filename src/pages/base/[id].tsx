@@ -947,6 +947,69 @@ const AirtableClone = () => {
     },
   });
 
+  // --- Per-grid-view sorting/filtering state and logic ---
+  // Type guards for backend data
+  const isSort = (obj: any): obj is Sort =>
+    obj &&
+    typeof obj === "object" &&
+    typeof obj.columnId === "string" &&
+    (obj.direction === "asc" || obj.direction === "desc");
+  const isFilter = (obj: any): obj is FilterType =>
+    obj &&
+    typeof obj === "object" &&
+    typeof obj.columnId === "string" &&
+    (obj.columnType === "TEXT" || obj.columnType === "NUMBER") &&
+    typeof obj.condition === "string";
+
+  // Track last loaded grid view to prevent overwriting local sorts/filters
+  const lastLoadedGridViewId = useRef<string | null>(null);
+
+  // Load sorts/filters from backend only when switching grid views
+  useEffect(() => {
+    if (!selectedGridViewId || !gridViewsData) return;
+    if (lastLoadedGridViewId.current === selectedGridViewId) return;
+    const selectedView = gridViewsData.find((v) => v.id === selectedGridViewId);
+    if (!selectedView) return;
+    // Always expect arrays for both sorts and filters
+    const backendSorts = Array.isArray(selectedView.sort)
+      ? (selectedView.sort.filter(isSort) as unknown as Sort[])
+      : [];
+    const backendFilters = Array.isArray(selectedView.filter)
+      ? (selectedView.filter.filter(isFilter) as unknown as FilterType[])
+      : [];
+    const backendTextFilters = backendFilters.filter((f) => f.columnType === "TEXT");
+    const backendNumberFilters = backendFilters.filter((f) => f.columnType === "NUMBER");
+    setSorts(backendSorts);
+    setTextFilters(backendTextFilters);
+    setNumberFilters(backendNumberFilters);
+    lastLoadedGridViewId.current = selectedGridViewId;
+  }, [selectedGridViewId, gridViewsData]);
+
+  // Save sorts/filters to backend when they change for the current grid view
+  useEffect(() => {
+    if (!selectedGridViewId || !gridViewsData) return;
+    const selectedView = gridViewsData.find((v) => v.id === selectedGridViewId);
+    if (!selectedView) return;
+    // Always send arrays for both sorts and filters
+    const newSort = sorts.filter(isSort);
+    const newFilter = [...textFilters, ...numberFilters].filter(isFilter);
+    const backendSort = Array.isArray(selectedView.sort)
+      ? selectedView.sort.filter(isSort)
+      : [];
+    const backendFilter = Array.isArray(selectedView.filter)
+      ? selectedView.filter.filter(isFilter)
+      : [];
+    if (
+      JSON.stringify(backendSort) !== JSON.stringify(newSort) ||
+      JSON.stringify(backendFilter) !== JSON.stringify(newFilter)
+    ) {
+      updateGridView.mutate({
+        id: selectedGridViewId,
+        sort: newSort, // always array
+        filter: newFilter, // always array
+      });
+    }
+  }, [sorts, textFilters, numberFilters, selectedGridViewId, gridViewsData]);
   // =============================
   // Mutations: Add/Update Table, Column, Row, Many Rows
   // =============================
@@ -1554,12 +1617,7 @@ const AirtableClone = () => {
                       setNumberFilters([]);
                       setSearchTerm("");
                       setShowSort(false);
-                      // Clear persisted data for previous table/base
-                      if (baseId) {
-                        localStorage.removeItem(`textFilters_${baseId}`);
-                        localStorage.removeItem(`numberFilters_${baseId}`);
-                        localStorage.removeItem(`sorts_${baseId}`);
-                      }
+                      // Remove localStorage persistence for sorts/filters when switching tables
                     }}
                     className={`rounded px-3 py-1 text-sm font-medium ${
                       activeTableId === table.id
@@ -1792,12 +1850,7 @@ const AirtableClone = () => {
             setTextFilters([]);
             setNumberFilters([]);
             setShowSort(false);
-            // Clear persisted data
-            if (baseId) {
-              localStorage.removeItem(`textFilters_${baseId}`);
-              localStorage.removeItem(`numberFilters_${baseId}`);
-              localStorage.removeItem(`sorts_${baseId}`);
-            }
+            // Remove localStorage persistence for sorts/filters in clear button
             if (processedRows.length > 500) {
               window.location.reload();
             }
@@ -1840,10 +1893,14 @@ const AirtableClone = () => {
             <div
               className={
                 gridViewsData && gridViewsData.length >= 5
-                  ? "space-y-1 max-h-36 overflow-y-auto pr-1 custom-scrollbar"
+                  ? "custom-scrollbar max-h-36 space-y-1 overflow-y-auto pr-1"
                   : "space-y-1"
               }
-              style={gridViewsData && gridViewsData.length >= 5 ? { WebkitOverflowScrolling: 'touch' } : {}}
+              style={
+                gridViewsData && gridViewsData.length >= 5
+                  ? { WebkitOverflowScrolling: "touch" }
+                  : {}
+              }
             >
               {/* Main Grid View (no plus, tick if selected) - always show */}
               <div
@@ -1992,8 +2049,6 @@ const AirtableClone = () => {
                   {rowVirtualizer.getVirtualItems().map((virtualRow) => {
                     const rowIdx = virtualRow.index;
                     const isPlaceholderRow = rowIdx === processedRows.length;
-
-                    // Handle placeholder row
                     if (isPlaceholderRow) {
                       return (
                         <tr
@@ -2023,121 +2078,100 @@ const AirtableClone = () => {
                             <td
                               key={col.id}
                               className={`h-10 w-48 flex-shrink-0 border-b border-gray-200 group-hover:bg-gray-50 ${
-                                index === base.columns.length - 1
-                                  ? "border-r"
-                                  : ""
-                              }`}
-                            ></td>
-                          ))}
-                        </tr>
-                      );
-                    }
-
-                    // Handle regular rows
-                    const row = processedRows[rowIdx];
-                    if (!row) return null;
-
-                    const isAnimatingOut = animatingOutRowIds.has(row.id);
-                    const isTemporary = tempRowIds.has(row.id);
-
-                    return (
-                      <tr
-                        key={row.id}
-                        className={`flex transition-all duration-300 hover:bg-gray-50 ${
-                          isAnimatingOut
-                            ? "translate-y-[-20px] transform opacity-0"
-                            : "translate-y-0 transform opacity-100"
-                        } ${isTemporary ? "border-green-200 bg-green-50" : ""}`}
-                        style={{
-                          position: "absolute",
-                          top: 0,
-                          left: 0,
-                          width: "max-content",
-                          height: `${virtualRow.size}px`,
-                          transform: `translateY(${virtualRow.start}px)`,
-                        }}
-                      >
-                        <td className="sticky left-0 z-10 flex h-10 w-12 flex-shrink-0 items-center justify-center border-b border-r border-gray-200 bg-gray-50 text-center text-xs text-gray-500">
-                          {rowIdx + 1}
-                        </td>
-                        {base?.columns.map((col: Column, colIdx: number) => {
-                          const isSelected =
-                            selectedCell?.row === rowIdx &&
-                            selectedCell?.col === colIdx;
-                          const isEditing =
-                            editingCell?.row === rowIdx &&
-                            editingCell?.col === colIdx;
-                          const value = getCellValue(row, col.id);
-                          const isTempRow = row.id.startsWith("temp-row-");
-                          return (
-                            <td
-                              key={col.id}
-                              className={`relative flex h-10 w-48 flex-shrink-0 cursor-pointer items-center border-b border-r border-gray-200 px-3 ${
-                                cellMatchesSearch(value, searchTerm)
-                                  ? isSelected || isEditing
-                                    ? "bg-yellow-200 shadow-[inset_0_0_0_3px_#3b82f6]"
-                                    : "bg-yellow-200"
-                                  : isSelected || isEditing
-                                  ? "bg-white shadow-[inset_0_0_0_3px_#3b82f6]"
-                                  : ""
-                              }`}
-                              onClick={() => handleCellClick(rowIdx, colIdx)}
-                              onDoubleClick={() =>
-                                handleCellDoubleClick(rowIdx, colIdx)
-                              }
-                            >
-                              {isEditing ? (
-                                <input
-                                  disabled={isTempRow}
-                                  className="absolute inset-0 h-full w-full border-none bg-transparent px-3 py-0 text-sm outline-none"
-                                  autoFocus
-                                  value={value}
-                                  onChange={(e) =>
-                                    handleInputChange(
-                                      row.id,
-                                      col.id,
-                                      e.target.value
-                                    )
-                                  }
-                                  onBlur={handleEditEnd}
-                                  onKeyDown={(e) => {
-                                    if (
-                                      e.key === "Enter" ||
-                                      e.key === "Escape"
-                                    ) {
-                                      e.preventDefault();
-                                      handleEditEnd();
-                                    } else if (e.key === "Tab") {
-                                      e.preventDefault();
-                                      if (editingCell && base) {
-                                        const { row, col } = editingCell;
-                                        if (col < base.columns.length - 1) {
-                                          handleEditEndAndNavigate("none");
-                                          setSelectedCell({
-                                            row,
-                                            col: col + 1,
-                                          });
-                                          setEditingCell({ row, col: col + 1 });
-                                        }
-                                      }
-                                    }
-                                  }}
-                                  onMouseDown={(e) => e.stopPropagation()}
-                                  onClick={(e) => e.stopPropagation()}
-                                />
-                              ) : (
-                                <div className="truncate text-sm text-gray-700">
-                                  {searchTerm.trim()
-                                    ? highlightSearchMatch(value, searchTerm)
-                                    : value}
-                                </div>
-                              )}
-                            </td>
-                          );
-                        })}
+                              index === base.columns.length - 1 ? "border-r" : ""
+                            }`}
+                          ></td>
+                        ))}
                       </tr>
                     );
-                  })}{" "}
+                  }
+                  const row = processedRows[rowIdx];
+                  if (!row || !base) return null;
+                  const isAnimatingOut = animatingOutRowIds.has(row.id);
+                  const isTemporary = tempRowIds.has(row.id);
+                  return (
+                    <tr
+                      key={row.id}
+                      className={`flex transition-all duration-300 hover:bg-gray-50 ${
+                        isAnimatingOut
+                          ? "translate-y-[-20px] transform opacity-0"
+                          : "translate-y-0 transform opacity-100"
+                      } ${isTemporary ? "border-green-200 bg-green-50" : ""}`}
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        width: "max-content",
+                        height: `${virtualRow.size}px`,
+                        transform: `translateY(${virtualRow.start}px)`,
+                      }}
+                    >
+                      <td className="sticky left-0 z-10 flex h-10 w-12 flex-shrink-0 items-center justify-center border-b border-r border-gray-200 bg-gray-50 text-center text-xs text-gray-500">
+                        {rowIdx + 1}
+                      </td>
+                      {base.columns.map((col: Column, colIdx: number) => {
+                        const isSelected =
+                          selectedCell?.row === rowIdx && selectedCell?.col === colIdx;
+                        const isEditing =
+                          editingCell?.row === rowIdx && editingCell?.col === colIdx;
+                        const value = getCellValue(row, col.id);
+                        const isTempRow = row.id.startsWith("temp-row-");
+                        return (
+                          <td
+                            key={col.id}
+                            className={`relative flex h-10 w-48 flex-shrink-0 cursor-pointer items-center border-b border-r border-gray-200 px-3 ${
+                              cellMatchesSearch(value, searchTerm)
+                                ? isSelected || isEditing
+                                  ? "bg-yellow-200 shadow-[inset_0_0_0_3px_#3b82f6]"
+                                  : "bg-yellow-200"
+                                : isSelected || isEditing
+                                ? "bg-white shadow-[inset_0_0_0_3px_#3b82f6]"
+                                : ""
+                            }`}
+                            onClick={() => handleCellClick(rowIdx, colIdx)}
+                            onDoubleClick={() => handleCellDoubleClick(rowIdx, colIdx)}
+                          >
+                            {isEditing ? (
+                              <input
+                                disabled={isTempRow}
+                                className="absolute inset-0 h-full w-full border-none bg-transparent px-3 py-0 text-sm outline-none"
+                                autoFocus
+                                value={value}
+                                onChange={(e) => handleInputChange(row.id, col.id, e.target.value)}
+                                onBlur={handleEditEnd}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === "Escape") {
+                                    e.preventDefault();
+                                    handleEditEnd();
+                                  } else if (e.key === "Tab") {
+                                    e.preventDefault();
+                                    if (editingCell && base) {
+                                      const { row, col } = editingCell;
+                                      if (col < base.columns.length - 1) {
+                                        handleEditEndAndNavigate("none");
+                                        setSelectedCell({
+                                          row,
+                                          col: col + 1,
+                                        });
+                                        setEditingCell({ row, col: col + 1 });
+                                      }
+                                    }
+                                  }
+                                }}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            ) : (
+                              <div className="truncate text-sm text-gray-700">
+                                {searchTerm.trim() ? highlightSearchMatch(value, searchTerm) : value}
+                              </div>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
                 </tbody>
               </table>
             </div>
@@ -2164,14 +2198,8 @@ const AirtableClone = () => {
           ref={addColumnPopupRef}
           className="absolute z-20 w-56 rounded-md border border-gray-200 bg-white p-2 shadow-lg"
           style={{
-            top: addColumnButtonRef.current
-              ? addColumnButtonRef.current.getBoundingClientRect().bottom +
-                window.scrollY
-              : 0,
-            left: addColumnButtonRef.current
-              ? addColumnButtonRef.current.getBoundingClientRect().right +
-                window.scrollX
-              : 0,
+            top: (addColumnButtonRef.current?.getBoundingClientRect().bottom ?? 0) + window.scrollY,
+            left: (addColumnButtonRef.current?.getBoundingClientRect().right ?? 0) + window.scrollX,
             transform: "translateX(-100%)",
           }}
         >
