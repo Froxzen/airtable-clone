@@ -26,6 +26,7 @@ import { type Sort, type Column } from "~/types";
 import { type Filter as FilterType } from "~/server/api/routers/base";
 import FilterComponent from "~/components/FilterComponent";
 import { flushSync } from "react-dom";
+import AddManyRowsButton from "../../components/AddManyRowsButton";
 
 const AirtableClone = () => {
   // =============================
@@ -358,7 +359,7 @@ const AirtableClone = () => {
   const isFilterActive = allFilters.length > 0;
   const isClearActive = isSortActive || isFilterActive;
 
-  const PAGE_SIZE = 500; // Optimized for fast scrolling - loads more data per request
+  const PAGE_SIZE = 1000; // Optimized for fast scrolling - loads more data per request
   const [showAddColumnPopup, setShowAddColumnPopup] = useState(false);
   const addColumnButtonRef = useRef<HTMLButtonElement>(null);
   const addColumnPopupRef = useRef<HTMLDivElement>(null);
@@ -827,6 +828,67 @@ const AirtableClone = () => {
                   ? newRow.data
                   : {},
             }; // Check if the new row matches current filters/sorts
+            // Helper to check if a row matches current filters and sorts
+            function checkIfRowMatches(
+              row: {
+                id: string;
+                tableId: string;
+                data: Record<string, unknown>;
+              },
+              searchTerm: string,
+              filters: FilterType[],
+              sorts: Sort[],
+              columns?: Column[]
+            ): boolean {
+              // Filter logic
+              const passesFilters = filters.every((filter) => {
+                const columnId = filter.columnId;
+                const columnType = filter.columnType;
+                const condition = filter.condition;
+                const value = filter.value as unknown;
+                const cellValue = row.data[columnId];
+
+                if (columnType === "TEXT") {
+                  const str = String(cellValue ?? "").toLowerCase();
+                  const filterVal = String(value ?? "").toLowerCase();
+                  if (condition === "contains") return str.includes(filterVal);
+                  if (condition === "notContains")
+                    return !str.includes(filterVal);
+                  if (condition === "equals") return str === filterVal;
+                  if (condition === "notEquals") return str !== filterVal;
+                  if (condition === "isEmpty") return !str;
+                  if (condition === "isNotEmpty") return !!str;
+                } else if (columnType === "NUMBER") {
+                  const filterNum = Number(value);
+                  if (isNaN(filterNum)) return true;
+                  const cellNum =
+                    cellValue === null ||
+                    cellValue === undefined ||
+                    cellValue === ""
+                      ? 0
+                      : Number(cellValue);
+                  const finalCellNum = isNaN(cellNum) ? 0 : cellNum;
+                  if (condition === "gt") return finalCellNum > filterNum;
+                  if (condition === "lt") return finalCellNum < filterNum;
+                }
+                return true;
+              });
+
+              // Search logic
+              let passesSearch = true;
+              if (searchTerm && columns) {
+                passesSearch = columns.some((col) => {
+                  const value = row.data[col.id];
+                  return (
+                    typeof value === "string" &&
+                    value.toLowerCase().includes(searchTerm.toLowerCase())
+                  );
+                });
+              }
+
+              return passesFilters && passesSearch;
+            }
+
             const shouldBeVisible = checkIfRowMatches(
               cleanedNewRow,
               "",
@@ -1252,9 +1314,9 @@ const AirtableClone = () => {
   const handleKeyDown = async (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (!selectedCell || !base) return;
     const { row, col } = selectedCell;
-  
+
     if (editingCell) return; // Don't handle navigation if already editing
-  
+
     // Copy (Ctrl+C)
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
       e.preventDefault();
@@ -1271,33 +1333,30 @@ const AirtableClone = () => {
       }
       return;
     }
-  
+
     // Paste (Ctrl+V): Replace only the selected cell's value
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v") {
-      
       e.preventDefault();
       const rowObj = processedRows[row];
       const colObj = base.columns[col];
-      
+
       if (rowObj && colObj) {
-        
         try {
           const clipboardValue = await navigator.clipboard.readText();
-          console.log("Pasting:", clipboardValue); // Debug log
-          
-          // Clean up the clipboard value (remove extra newlines, etc.)
+          console.log("Pasting:", clipboardValue);
+
           const cleanedValue = clipboardValue.trim();
-          
+
           // Update the row data
           const dataObj = rowObj.data ?? {};
           const newData = { ...dataObj, [colObj.id]: cleanedValue };
-          
+
           // Update local state immediately for responsiveness
           setLocalCellValues((prev) => ({
             ...prev,
             [`${rowObj.id}-${colObj.id}`]: cleanedValue,
           }));
-          
+
           // Update the backend
           try {
             await updateRow.mutateAsync({ rowId: rowObj.id, data: newData });
@@ -1459,182 +1518,6 @@ const AirtableClone = () => {
     });
   };
 
-  const { mutate: addManyRows, isLoading: isAddingManyRows } =
-    trpc.base.addManyRows.useMutation({
-      onSuccess: (data) => {
-        const newRows = data.rows.map((row) => ({
-          ...row,
-          data:
-            row.data && typeof row.data === "object" && !Array.isArray(row.data)
-              ? row.data
-              : {},
-        }));
-        const queryKey = {
-          tableId: activeTableId ?? "",
-          limit: PAGE_SIZE,
-          filters: allFilters,
-          sortConfig: sorts,
-        };
-
-        flushSync(() => {
-          utils.base.getRowsInfinite.setInfiniteData(queryKey, (old) => {
-            if (!old) {
-              return {
-                pages: [{ rows: newRows, nextCursor: undefined }],
-                pageParams: [undefined],
-              };
-            }
-
-            const newPages = [...old.pages];
-            const lastPage = newPages[newPages.length - 1];
-
-            if (lastPage) {
-              newPages[newPages.length - 1] = {
-                ...lastPage,
-                rows: [...lastPage.rows, ...newRows],
-              };
-            } else {
-              newPages.push({ rows: newRows, nextCursor: undefined });
-            }
-
-            return {
-              ...old,
-              pages: newPages,
-            };
-          });
-        });
-        // Do NOT scroll the view after adding rows
-      },
-      onError: (error) => {
-        console.error("Failed to add rows:", error);
-      },
-    });
-  const handleAddManyRows = async () => {
-    if (!base || isAddingManyRows) return;
-
-    try {
-      // Add 5k rows 20 times for optimal progressive loading
-      for (let i = 0; i < 20; i++) {
-        await new Promise<void>((resolve, reject) => {
-          addManyRows(
-            {
-              tableId: activeTableId!,
-              count: 5000,
-            },
-            {
-              onSuccess: () => {
-                resolve();
-              },
-              onError: (error) => {
-                console.error(`Failed to add batch ${i + 1}:`, error);
-                reject(error);
-              },
-            }
-          );
-        });
-      }
-    } catch (error) {
-      console.error("Failed to add rows:", error);
-    }
-  };
-
-  const handleAddManyRowsWrapper = () => {
-    void handleAddManyRows();
-  };
-
-  // =============================
-  // Utility Functions
-  // =============================
-
-  // Helper function to check if a row matches the current filters, sorts, and search
-  const checkIfRowMatches = (
-    row: Row,
-    searchTerm: string,
-    filters: FilterType[],
-    sorts: Sort[],
-    columns?: Column[]
-  ): boolean => {
-    if (!columns) return true;
-
-    const rowData = row.data as { [key: string]: unknown };
-
-    // Apply search filter
-    if (searchTerm) {
-      const matchesSearch = columns.some((col) => {
-        const value = rowData[col.id];
-        return (
-          value != null &&
-          String(value).toLowerCase().includes(searchTerm.toLowerCase())
-        );
-      });
-      if (!matchesSearch) return false;
-    }
-
-    // Apply column filters
-    if (filters.length > 0) {
-      const matchesFilters = filters.every((filter) => {
-        const columnId = filter.columnId;
-        const columnType = filter.columnType;
-        const condition = filter.condition;
-        const value = filter.value as unknown;
-        const cellValue = rowData[columnId];
-
-        if (columnType === "TEXT") {
-          const str = String(cellValue ?? "").toLowerCase();
-          const filterVal = String(value ?? "").toLowerCase();
-          if (condition === "contains") return str.includes(filterVal);
-          if (condition === "notContains") return !str.includes(filterVal);
-          if (condition === "equals") return str === filterVal;
-          if (condition === "notEquals") return str !== filterVal;
-          if (condition === "isEmpty") return !str;
-          if (condition === "isNotEmpty") return !!str;
-        } else if (columnType === "NUMBER") {
-          const filterNum = Number(value);
-
-          // If filter value is not a valid number, skip this filter
-          if (isNaN(filterNum)) return true;
-
-          // Convert cell value to number, treat empty/null as 0
-          const cellNum =
-            cellValue === null || cellValue === undefined || cellValue === ""
-              ? 0
-              : Number(cellValue);
-
-          // If cell value is not a valid number, treat as 0
-          const finalCellNum = isNaN(cellNum) ? 0 : cellNum;
-
-          if (condition === "gt") return finalCellNum > filterNum;
-          if (condition === "lt") return finalCellNum < filterNum;
-        }
-
-        return true;
-      });
-      if (!matchesFilters) return false;
-    }
-
-    return true;
-  };
-
-  // Disable sort/filter if not all rows are loaded
-  // const disableSortAndFilter = hasNextPage || isFetchingNextPage;
-  const disableSortAndFilter = false;
-
-  if (session === undefined) {
-    // Session is loading
-    return (
-      <div className="flex h-screen w-screen items-center justify-center">
-        <span className="text-lg font-medium text-gray-500">Loading...</span>
-      </div>
-    );
-  }
-  if (!session) {
-    // Not signed in
-    return (
-      <div className="p-8 text-gray-500">
-        Please sign in to access this page.
-      </div>
-    );
-  }
   // =============================
   // Render: Main Component Output
   // =============================
@@ -1714,7 +1597,6 @@ const AirtableClone = () => {
                   <button
                     key={table.id}
                     onClick={() => {
-                      if (isAddingManyRows) return; // Prevent switching tables while adding rows
                       setActiveTableId(table.id);
                       setSorts([]);
                       setTextFilters([]);
@@ -1727,10 +1609,7 @@ const AirtableClone = () => {
                       activeTableId === table.id
                         ? "bg-white bg-opacity-20 text-white"
                         : "text-white hover:bg-white hover:bg-opacity-10"
-                    } ${
-                      isAddingManyRows ? "cursor-not-allowed opacity-60" : ""
                     }`}
-                    disabled={isAddingManyRows}
                   >
                     {table.name.length > 30
                       ? table.name.slice(0, 30) + "..."
@@ -1750,12 +1629,6 @@ const AirtableClone = () => {
                     }
                   }}
                   className="flex items-center gap-1 rounded px-3 py-1 text-sm font-medium text-white hover:bg-white hover:bg-opacity-10"
-                  disabled={isAddingManyRows}
-                  style={
-                    isAddingManyRows
-                      ? { cursor: "not-allowed", opacity: 0.6 }
-                      : {}
-                  }
                 >
                   <Plus className="h-4 w-4" />
                   Add Table
@@ -1769,23 +1642,7 @@ const AirtableClone = () => {
           Controls Bar: Sort, Filter, Search
       ============================= */}
       <div className="flex items-center gap-4 border-b border-gray-200 bg-purple-50 px-4 py-3">
-        <button
-          onClick={handleAddManyRowsWrapper}
-          disabled={isAddingManyRows}
-          className="flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-gray-600 shadow hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {isAddingManyRows ? (
-            <>
-              <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-gray-900" />
-              <span className="ml-2">Adding...</span>
-            </>
-          ) : (
-            <>
-              <Plus className="h-4 w-4" />
-              <span>Add 100k rows</span>
-            </>
-          )}
-        </button>
+        <AddManyRowsButton tableId={activeTableId} disabled={!base} />
         {/* Filter/Sort Indicators */}
         <div className="relative inline-block">
           {sorts && sorts.length > 0 ? (
@@ -1797,7 +1654,7 @@ const AirtableClone = () => {
                 ` disabled:cursor-not-allowed disabled:opacity-50`
               }
               type="button"
-              disabled={isAddingManyRows}
+              disabled={false}
             >
               <SortAsc className="h-4 w-4" />
               Sorted by {sorts.length} field{sorts.length > 1 ? "s" : ""}
@@ -1808,7 +1665,7 @@ const AirtableClone = () => {
               onClick={() => setShowSort(!showSort)}
               className={`flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-gray-600 shadow hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50`}
               type="button"
-              disabled={isAddingManyRows}
+              disabled={false}
             >
               <SortAsc className="h-4 w-4" />
               Sort
@@ -1939,7 +1796,7 @@ const AirtableClone = () => {
               onUpdateFilter={handleUpdateTextFilter}
               filterType="TEXT"
               buttonLabel="Filter Text"
-              disabled={isAddingManyRows}
+              disabled={false}
             />
             <FilterComponent
               columns={base.columns.filter((c: Column) => c.type === "NUMBER")}
@@ -1949,7 +1806,7 @@ const AirtableClone = () => {
               onUpdateFilter={handleUpdateNumberFilter}
               filterType="NUMBER"
               buttonLabel="Filter Number"
-              disabled={isAddingManyRows}
+              disabled={false}
             />
           </>
         )}{" "}
@@ -1959,16 +1816,12 @@ const AirtableClone = () => {
               ? "cursor-pointer bg-red-100 text-red-600 hover:bg-red-200"
               : "cursor-not-allowed bg-gray-100 text-gray-400"
           }`}
-          disabled={!isClearActive || isAddingManyRows}
+          disabled={!isClearActive || false}
           onClick={() => {
             setSorts([]);
             setTextFilters([]);
             setNumberFilters([]);
             setShowSort(false);
-            // Remove localStorage persistence for sorts/filters in clear button
-            if (processedRows.length > 500) {
-              window.location.reload();
-            }
           }}
           title="Clear sorting and filters"
           type="button"
@@ -1982,7 +1835,7 @@ const AirtableClone = () => {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="rounded border border-gray-300 px-3 py-1 text-sm text-gray-700 focus:border-purple-400 focus:outline-none"
-            disabled={isAddingManyRows}
+            disabled={false}
           />
           <span className="absolute right-2 top-2 text-gray-400">
             <Search className="h-4 w-4" />
