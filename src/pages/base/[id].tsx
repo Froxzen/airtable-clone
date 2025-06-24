@@ -64,6 +64,8 @@ const AirtableClone = () => {
   );
 
   const [sorts, setSorts] = useState<Sort[]>([]);
+  const [sortingFrozen, setSortingFrozen] = useState(false);
+  const sortingUnfreezeTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // =============================
   // Effects: Load/Persist Filters, Sorts, Table Selection
@@ -365,8 +367,8 @@ const AirtableClone = () => {
 
     let rows = allRows;
 
-    // Apply sorting if there are sorts
-    if (sorts.length > 0) {
+    // Apply sorting if there are sorts and sorting is not frozen
+    if (sorts.length > 0 && !sortingFrozen) {
       rows = rows.sort((a, b) => {
         // Keep temporary rows at the end during their display period
         if (tempRowIds.has(a.id) && !tempRowIds.has(b.id)) return 1;
@@ -477,7 +479,7 @@ const AirtableClone = () => {
     }
 
     return rows;
-  }, [allRows, allFilters, sorts, base?.columns, tempRowIds]);
+  }, [allRows, allFilters, sorts, base?.columns, tempRowIds, sortingFrozen]);
 
   // =============================
   // Virtualization Setup
@@ -1020,6 +1022,7 @@ const AirtableClone = () => {
 
   const handleCellDoubleClick = (rowIdx: number, colIdx: number) => {
     setEditingCell({ row: rowIdx, col: colIdx });
+    setSortingFrozen(true);
     wrapperRef.current?.blur();
   };
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -1049,18 +1052,15 @@ const AirtableClone = () => {
         }
         break;
       case "Enter":
-        // Enter puts the selected cell into editing mode (do not move down)
         setEditingCell({ row, col });
+        setSortingFrozen(true);
         wrapperRef.current?.blur();
         break;
       default:
+        // Only enter editing mode, don't update value here. Input will handle the value.
         if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-          const rowData = allRows[row];
-          const colId = base.columns[col]?.id;
-          if (rowData && colId) {
-            handleCellValueChange(rowData.id, colId, e.key);
-            setEditingCell({ row, col });
-          }
+          setEditingCell({ row, col });
+          setSortingFrozen(true);
         }
         break;
     }
@@ -1149,6 +1149,13 @@ const AirtableClone = () => {
   // Handle ending edit mode
   const handleEditEnd = () => {
     handleEditEndAndNavigate("none");
+    // Unfreeze sorting after 1 second
+    if (sortingUnfreezeTimeout.current) {
+      clearTimeout(sortingUnfreezeTimeout.current);
+    }
+    sortingUnfreezeTimeout.current = setTimeout(() => {
+      setSortingFrozen(false);
+    }, 1000);
   };
 
   // Handle sign out
