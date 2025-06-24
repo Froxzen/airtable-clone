@@ -1049,11 +1049,9 @@ const AirtableClone = () => {
         }
         break;
       case "Enter":
-        if (e.shiftKey) {
-          if (row > 0) setSelectedCell({ row: row - 1, col });
-        } else {
-          if (row < allRows.length - 1) setSelectedCell({ row: row + 1, col });
-        }
+        // Enter puts the selected cell into editing mode (do not move down)
+        setEditingCell({ row, col });
+        wrapperRef.current?.blur();
         break;
       default:
         if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
