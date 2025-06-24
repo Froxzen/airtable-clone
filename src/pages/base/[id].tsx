@@ -193,6 +193,51 @@ const AirtableClone = () => {
     null
   );
 
+  // Add state and refs for Add Grid View popup
+  const [showAddGridViewPopup, setShowAddGridViewPopup] = useState(false);
+  const [newGridViewName, setNewGridViewName] = useState("");
+  const addGridViewButtonRef = useRef<HTMLDivElement>(null);
+  const addGridViewPopupRef = useRef<HTMLDivElement>(null);
+  const [addGridViewPopupPos, setAddGridViewPopupPos] = useState({ top: 0, left: 0 });
+
+  // Handler to show Add Grid View popup
+  const handleShowAddGridViewPopup = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    if (showAddGridViewPopup) {
+      setShowAddGridViewPopup(false);
+      setNewGridViewName("");
+    } else {
+      // Position popup below the button
+      if (addGridViewButtonRef.current) {
+        const rect = addGridViewButtonRef.current.getBoundingClientRect();
+        setAddGridViewPopupPos({
+          top: rect.bottom + window.scrollY,
+          left: rect.left + window.scrollX,
+        });
+      }
+      setShowAddGridViewPopup(true);
+    }
+  };
+
+  // Handler to create a new grid view
+  const handleCreateGridView = () => {
+    if (!activeTableId || !newGridViewName.trim()) return;
+    createGridView.mutate({
+      tableId: activeTableId,
+      name: newGridViewName.trim(),
+      filter: null,
+      sort: null,
+    });
+    setShowAddGridViewPopup(false);
+    setNewGridViewName("");
+  };
+
+  // Handler to cancel Add Grid View popup
+  const handleCancelAddGridView = () => {
+    setShowAddGridViewPopup(false);
+    setNewGridViewName("");
+  };
+
   // When grid views or table changes, select the first grid view by default
   useEffect(() => {
     if (!activeTableId || !gridViewsData || gridViewsData.length === 0) {
@@ -957,13 +1002,25 @@ const AirtableClone = () => {
         setShowAddTableModal(false);
         setNewTableName("");
       }
+
+      // Grid View Popup
+      if (
+        showAddGridViewPopup &&
+        addGridViewPopupRef.current &&
+        !addGridViewPopupRef.current.contains(target) &&
+        addGridViewButtonRef.current &&
+        !addGridViewButtonRef.current.contains(target)
+      ) {
+        setShowAddGridViewPopup(false);
+        setNewGridViewName("");
+      }
     };
 
     document.addEventListener("mousedown", handleClickOutside);
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [showSort, showAddColumnPopup, showAddTableModal]);
+  }, [showSort, showAddColumnPopup, showAddTableModal, showAddGridViewPopup]);
   // Click outside to close Add Table popup
   useEffect(() => {
     if (!showAddTableModal) return;
@@ -1830,12 +1887,13 @@ const AirtableClone = () => {
             <div className="space-y-1">
               {/* Grid view + row (to add new grid view) */}
               <div
+                ref={addGridViewButtonRef}
                 className="flex cursor-pointer items-center justify-between rounded px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
-                onClick={handleAddGridView}
+                onClick={handleShowAddGridViewPopup}
               >
                 <div className="flex items-center gap-2">
                   <Grid3X3 className="h-4 w-4" />
-                  <span>Grid view</span>
+                  <span>Grid view +</span>
                 </div>
                 <Plus className="h-4 w-4" />
               </div>
@@ -2183,6 +2241,55 @@ const AirtableClone = () => {
                 Create
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* =============================
+          Add Grid View Popup
+      ============================= */}
+      {showAddGridViewPopup && (
+        <div
+          ref={addGridViewPopupRef}
+          className="absolute z-40 w-72 rounded-md border border-gray-200 bg-white p-4 shadow-xl"
+          style={{
+            top: addGridViewPopupPos.top,
+            left: addGridViewPopupPos.left,
+          }}
+        >
+          <div className="mb-2 text-sm font-medium text-gray-700">
+            Create new grid view
+          </div>
+          <input
+            type="text"
+            value={newGridViewName}
+            onChange={(e) => setNewGridViewName(e.target.value)}
+            placeholder="Grid view name"
+            className="mb-4 w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && newGridViewName.trim()) {
+                e.preventDefault();
+                handleCreateGridView();
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                handleCancelAddGridView();
+              }
+            }}
+          />
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={handleCancelAddGridView}
+              className="rounded border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleCreateGridView}
+              className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-blue-300"
+              disabled={!newGridViewName.trim()}
+            >
+              Create new view
+            </button>
           </div>
         </div>
       )}
