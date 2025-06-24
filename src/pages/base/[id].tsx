@@ -3,7 +3,7 @@ import { trpc } from "~/utils/api";
 import { useRouter } from "next/router";
 import { useSession, signOut } from "next-auth/react";
 import {
-  ChevronDown,
+  Check,
   Plus,
   Grid3X3,
   Calendar,
@@ -12,10 +12,11 @@ import {
   List,
   GanttChart,
   FileText,
+  ChevronDown,
   Settings,
   Search,
-  SortAsc,
   Trash2,
+  SortAsc,
   X,
 } from "lucide-react";
 import { Bars3BottomLeftIcon, HashtagIcon } from "@heroicons/react/24/outline";
@@ -159,6 +160,105 @@ const AirtableClone = () => {
   ) as { data: { columns: Column[] } | undefined };
 
   const base = currentTable;
+
+  // =============================
+  // Grid Views State & Handlers (per-table)
+  // =============================
+  type GridView = {
+    id: string;
+    name: string;
+    columns: Column[];
+  };
+
+  const [gridViews, setGridViews] = useState<GridView[]>([]);
+  const [selectedGridViewId, setSelectedGridViewId] = useState<string | null>(
+    null
+  );
+
+  // Load grid views and selected view for the current table
+  useEffect(() => {
+    if (!activeTableId || !base) return;
+    const persisted = localStorage.getItem(`gridViews_${activeTableId}`);
+    let loadedViews: GridView[] = [];
+    if (persisted) {
+      try {
+        loadedViews = JSON.parse(persisted) as GridView[];
+      } catch (e) {
+        loadedViews = [];
+      }
+    }
+    if (!loadedViews.length) {
+      // Initialize with main grid view if not present
+      loadedViews = [
+        {
+          id: `main-${activeTableId}`,
+          name: "Grid view",
+          columns: base.columns,
+        },
+      ];
+      localStorage.setItem(
+        `gridViews_${activeTableId}`,
+        JSON.stringify(loadedViews)
+      );
+    }
+    setGridViews(loadedViews);
+    // Load selected view for this table
+    const persistedSelected = localStorage.getItem(
+      `selectedGridViewId_${activeTableId}`
+    );
+    if (
+      persistedSelected &&
+      loadedViews.some((v) => v.id === persistedSelected)
+    ) {
+      setSelectedGridViewId(persistedSelected);
+    } else if (loadedViews[0]) {
+      setSelectedGridViewId(loadedViews[0].id);
+      localStorage.setItem(
+        `selectedGridViewId_${activeTableId}`,
+        loadedViews[0].id
+      );
+    }
+  }, [activeTableId, base]);
+
+  // Persist grid views and selected view per table
+  useEffect(() => {
+    if (!activeTableId) return;
+    localStorage.setItem(
+      `gridViews_${activeTableId}`,
+      JSON.stringify(gridViews)
+    );
+  }, [activeTableId, gridViews]);
+  useEffect(() => {
+    if (!activeTableId || !selectedGridViewId) return;
+    localStorage.setItem(
+      `selectedGridViewId_${activeTableId}`,
+      selectedGridViewId
+    );
+  }, [activeTableId, selectedGridViewId]);
+
+  const handleAddGridView = () => {
+    if (!base || !activeTableId) return;
+    const newView: GridView = {
+      id: `grid-${Date.now()}`,
+      name: `Grid view ${gridViews.length}`,
+      columns: base.columns.map((col) => ({ ...col })),
+    };
+    const updatedViews = [...gridViews, newView];
+    setGridViews(updatedViews);
+    setSelectedGridViewId(newView.id);
+    localStorage.setItem(
+      `gridViews_${activeTableId}`,
+      JSON.stringify(updatedViews)
+    );
+    localStorage.setItem(`selectedGridViewId_${activeTableId}`, newView.id);
+  };
+
+  const handleSelectGridView = (id: string) => {
+    setSelectedGridViewId(id);
+    if (activeTableId) {
+      localStorage.setItem(`selectedGridViewId_${activeTableId}`, id);
+    }
+  };
 
   // Calculate base color (same logic as dashboard)
   const getBaseColor = useMemo(() => {
@@ -1710,21 +1810,46 @@ const AirtableClone = () => {
               <Settings className="absolute right-2 top-2 h-4 w-4 text-gray-400" />
             </div>
             <div className="space-y-1">
-              {views.slice(0, 1).map((view) => (
+              {/* Main Grid View (no plus, tick if selected) - always show */}
+              <div
+                key={gridViews[0]?.id || "main-grid-view"}
+                className={`flex cursor-pointer items-center justify-between rounded px-2 py-1.5 text-sm ${
+                  selectedGridViewId === gridViews[0]?.id
+                    ? "bg-blue-100 font-semibold text-blue-700"
+                    : "text-gray-700 hover:bg-gray-100"
+                }`}
+                onClick={() =>
+                  gridViews[0] && handleSelectGridView(gridViews[0].id)
+                }
+              >
+                <div className="flex items-center gap-2">
+                  <Grid3X3 className="h-4 w-4" />
+                  <span>{gridViews[0]?.name || "Grid view"}</span>
+                </div>
+                {selectedGridViewId === gridViews[0]?.id && (
+                  <Check className="h-4 w-4 text-blue-600" />
+                )}
+              </div>
+              {/* Additional Grid Views (clones) */}
+              {gridViews.slice(1).map((view) => (
                 <div
-                  key={view.name}
-                  className="flex items-center justify-between rounded px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
+                  key={view.id}
+                  className={`flex cursor-pointer items-center justify-between rounded px-2 py-1.5 text-sm ${
+                    selectedGridViewId === view.id
+                      ? "bg-blue-100 font-semibold text-blue-700"
+                      : "text-gray-700 hover:bg-gray-100"
+                  }`}
+                  onClick={() => handleSelectGridView(view.id)}
                 >
-                  <div className="flex items-center space-x-2">
-                    {view.icon && <view.icon className={`h-4 w-4`} />}
+                  <div className="flex items-center gap-2">
+                    <Grid3X3 className="h-4 w-4" />
                     <span>{view.name}</span>
-                    {view.badge && (
-                      <span className="rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-600">
-                        {view.badge}
-                      </span>
-                    )}
                   </div>
-                  <Plus className="h-3 w-3" />
+                  {selectedGridViewId === view.id ? (
+                    <Check className="h-4 w-4 text-blue-600" />
+                  ) : (
+                    <Plus className="h-4 w-4 opacity-0" />
+                  )}
                 </div>
               ))}
             </div>
@@ -1738,39 +1863,18 @@ const AirtableClone = () => {
               <ChevronDown className="h-3 w-3 text-gray-400" />
             </div>
             <div className="space-y-1">
-              {views.slice(0, 7).map((view) => (
-                <div
-                  key={view.name}
-                  className="flex items-center justify-between rounded px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
-                >
-                  <div className="flex items-center space-x-2">
-                    {view.icon && <view.icon className={`h-4 w-4`} />}
-                    <span>{view.name}</span>
-                    {view.badge && (
-                      <span className="rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-600">
-                        {view.badge}
-                      </span>
-                    )}
-                  </div>
-                  <Plus className="h-3 w-3" />
+              {/* Grid view + row (to add new grid view) */}
+              <div
+                className="flex cursor-pointer items-center justify-between rounded px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
+                onClick={handleAddGridView}
+              >
+                <div className="flex items-center gap-2">
+                  <Grid3X3 className="h-4 w-4" />
+                  <span>Grid view +</span>
                 </div>
-              ))}
-              <div className="flex items-center justify-between rounded px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm">New section</span>
-                  <span className="rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-600">
-                    Team
-                  </span>
-                </div>
-                <Plus className="h-3 w-3" />
+                <Plus className="h-4 w-4" />
               </div>
-              <div className="flex items-center justify-between rounded px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
-                <div className="flex items-center space-x-2">
-                  <FileText className="h-4 w-4" />
-                  <span>Form</span>
-                </div>
-                <Plus className="h-3 w-3" />
-              </div>
+              {/* ...other view types can go here... */}
             </div>
           </div>
         </div>
