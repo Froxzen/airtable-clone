@@ -207,12 +207,12 @@ const AirtableClone = () => {
       setShowAddGridViewPopup(false);
       setNewGridViewName("");
     } else {
-      // Position popup below the button
+      // Position popup to the right of the button
       if (addGridViewButtonRef.current) {
         const rect = addGridViewButtonRef.current.getBoundingClientRect();
         setAddGridViewPopupPos({
-          top: rect.bottom + window.scrollY,
-          left: rect.left + window.scrollX,
+          top: rect.top + window.scrollY,
+          left: rect.right + window.scrollX,
         });
       }
       setShowAddGridViewPopup(true);
@@ -2250,45 +2250,37 @@ const AirtableClone = () => {
       {showAddGridViewPopup && (
         <div
           ref={addGridViewPopupRef}
-          className="absolute z-40 w-72 rounded-md border border-gray-200 bg-white p-4 shadow-xl"
+          className="z-50 absolute bg-white border border-gray-200 rounded shadow-lg p-4 w-72"
           style={{
             top: addGridViewPopupPos.top,
             left: addGridViewPopupPos.left,
+            position: "absolute",
           }}
         >
-          <div className="mb-2 text-sm font-medium text-gray-700">
-            Create new grid view
-          </div>
+          <div className="mb-2 text-sm font-medium text-gray-700">Create new grid view</div>
           <input
             type="text"
-            value={newGridViewName}
-            onChange={(e) => setNewGridViewName(e.target.value)}
+            className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-purple-400 focus:outline-none mb-3"
             placeholder="Grid view name"
-            className="mb-4 w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+            value={newGridViewName}
+            onChange={e => setNewGridViewName(e.target.value)}
             autoFocus
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && newGridViewName.trim()) {
-                e.preventDefault();
-                handleCreateGridView();
-              } else if (e.key === "Escape") {
-                e.preventDefault();
-                handleCancelAddGridView();
-              }
-            }}
           />
           <div className="flex justify-end gap-2">
             <button
+              className="px-3 py-1 rounded text-sm text-gray-600 hover:bg-gray-100"
               onClick={handleCancelAddGridView}
-              className="rounded border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+              type="button"
             >
               Cancel
             </button>
             <button
+              className="px-3 py-1 rounded text-sm text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50"
               onClick={handleCreateGridView}
-              className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-blue-300"
               disabled={!newGridViewName.trim()}
+              type="button"
             >
-              Create new view
+              Create
             </button>
           </div>
         </div>
