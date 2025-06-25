@@ -554,7 +554,7 @@ const AirtableClone = () => {
     count: processedRows.length + 1, // +1 for placeholder row
     estimateSize: () => 40,
     getScrollElement: () => tableContainerRef.current,
-    overscan: 25, // Increased for smoother fast scrolling
+    overscan: 50, // Increased for much smoother scrolling
     // Preserve scroll position when data changes
     scrollToFn: (offset, options) => {
       if (tableContainerRef.current) {
@@ -632,7 +632,7 @@ const AirtableClone = () => {
 
     // If we're creating many rows, fetch next page more aggressively
     const shouldFetchAggressively = isCreatingManyRows;
-    const triggerDistance = shouldFetchAggressively ? 1000 : 500; // More aggressive when creating rows
+    const triggerDistance = shouldFetchAggressively ? 2000 : 1500; // Much more aggressive for smooth scrolling
 
     if (
       lastItem.index >= processedRows.length - triggerDistance &&
@@ -649,6 +649,32 @@ const AirtableClone = () => {
     fetchNextPage,
     isCreatingManyRows,
   ]);
+
+  // Additional scroll-based pre-fetching for smoother experience
+  useEffect(() => {
+    const container = tableContainerRef.current;
+    if (!container || !hasNextPage || isFetchingNextPage) return;
+
+    const handleScrollForPrefetch = () => {
+      const scrollTop = container.scrollTop;
+      const scrollHeight = container.scrollHeight;
+      const clientHeight = container.clientHeight;
+
+      // Calculate scroll percentage
+      const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
+
+      // Trigger fetch when user scrolls past 70% of current content
+      if (scrollPercentage > 0.7 && hasNextPage && !isFetchingNextPage) {
+        void fetchNextPage();
+      }
+    };
+
+    container.addEventListener("scroll", handleScrollForPrefetch, {
+      passive: true,
+    });
+    return () =>
+      container.removeEventListener("scroll", handleScrollForPrefetch);
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // =============================
   // Handlers: Filters, Sorts, Search, Columns, Rows
