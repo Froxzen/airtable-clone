@@ -591,7 +591,7 @@ const AirtableClone = () => {
       return;
     } // Load next page earlier when scrolling fast - trigger at 100 rows before end
     if (
-      lastItem.index >= processedRows.length - 100 &&
+      lastItem.index >= processedRows.length - 200 &&
       hasNextPage &&
       !isFetchingNextPage
     ) {
