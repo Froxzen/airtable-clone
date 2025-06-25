@@ -42,19 +42,27 @@ const FilterComponent: React.FC<FilterProps> = ({
   const popupRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
+  // Only columns of the relevant type
   const relevantColumns = columns.filter((c) => c.type === filterType);
 
+  // Used column IDs
+  const usedColumnIds = filters.map((f) => f.columnId);
+  // Columns not yet filtered
+  const availableColumns = relevantColumns.filter(
+    (col) => !usedColumnIds.includes(col.id)
+  );
+
+  // Add filter: pick first available column
   const handleAddFilter = () => {
-    const firstColumn = relevantColumns[0];
-    if (firstColumn) {
-      const isText = firstColumn.type === "TEXT";
-      onAddFilter({
-        columnId: firstColumn.id,
-        columnType: firstColumn.type,
-        condition: isText ? "contains" : "gt",
-        value: isText ? "" : "0",
-      });
-    }
+    if (availableColumns.length === 0) return;
+    const firstAvailable = availableColumns[0];
+    if (!firstAvailable) return;
+    onAddFilter({
+      columnId: firstAvailable.id,
+      columnType: filterType,
+      condition: filterType === "TEXT" ? "contains" : "gt",
+      value: "",
+    });
   };
 
   useEffect(() => {
@@ -89,9 +97,18 @@ const FilterComponent: React.FC<FilterProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters, isOpen]);
 
+  // Only filters for relevant columns
   const relevantFilters = filters.filter((f) =>
     relevantColumns.some((c) => c.id === f.columnId)
   );
+
+  // Helper: for each filter row, show all relevant columns not used by other filters, plus the current one
+  function getSelectableColumns(filterId: string) {
+    const otherUsed = relevantFilters
+      .filter((f) => f.id !== filterId)
+      .map((f) => f.columnId);
+    return relevantColumns.filter((col) => !otherUsed.includes(col.id));
+  }
 
   return (
     <div className="relative">
@@ -177,92 +194,96 @@ const FilterComponent: React.FC<FilterProps> = ({
             In this view, show records
           </div>
 
-          {relevantFilters.map((filter) => (
-            <div
-              key={filter.id}
-              className="mb-2 grid grid-cols-[auto_1fr_1fr_1fr_auto] items-center gap-2"
-            >
-              <span className="text-sm text-gray-500">Where</span>
-              {/* Column Selector */}
-              <select
-                value={filter.columnId}
-                onChange={(e) => {
-                  const newColumnId = e.target.value;
-                  const newColumn = columns.find((c) => c.id === newColumnId);
-                  if (newColumn) {
-                    const isText = newColumn.type === "TEXT";
+          {relevantFilters.map((filter: Filter) => {
+            const selectableColumns = getSelectableColumns(filter.id);
+            // If the current columnId is not in selectableColumns, fallback to first available
+            const currentColValid = selectableColumns.some(
+              (col) => col.id === filter.columnId
+            );
+            const dropdownValue = currentColValid
+              ? filter.columnId
+              : selectableColumns[0]?.id || "";
+            return (
+              <div
+                key={filter.id}
+                className="mb-2 grid grid-cols-[auto_1fr_1fr_1fr_auto] items-center gap-2"
+              >
+                <span className="text-sm text-gray-500">Where</span>
+                {/* Column Selector */}
+                <select
+                  value={dropdownValue}
+                  onChange={(e) =>
+                    onUpdateFilter({ ...filter, columnId: e.target.value })
+                  }
+                  className="rounded border border-gray-300 bg-white px-2 py-1 text-sm shadow-sm focus:border-purple-500 focus:ring-purple-500"
+                >
+                  {selectableColumns.map((col) => (
+                    <option key={col.id} value={col.id}>
+                      {col.name}
+                    </option>
+                  ))}
+                </select>{" "}
+                {/* Condition Selector */}
+                <select
+                  value={filter.condition}
+                  onChange={(e) =>
                     onUpdateFilter({
                       ...filter,
-                      columnId: newColumn.id,
-                      columnType: newColumn.type,
-                      condition: isText ? "contains" : "gt",
-                      value: isText ? "" : "0",
-                    });
+                      condition: e.target.value,
+                      value:
+                        filter.columnType === "NUMBER"
+                          ? (filter.value as string) || "0"
+                          : "",
+                    })
                   }
-                }}
-                className="rounded border border-gray-300 bg-white px-2 py-1 text-sm shadow-sm focus:border-purple-500 focus:ring-purple-500"
-              >
-                {relevantColumns.map((col) => (
-                  <option key={col.id} value={col.id}>
-                    {col.name}
-                  </option>
-                ))}
-              </select>{" "}
-              {/* Condition Selector */}
-              <select
-                value={filter.condition}
-                onChange={(e) =>
-                  onUpdateFilter({
-                    ...filter,
-                    condition: e.target.value,
-                    value:
-                      filter.columnType === "NUMBER"
-                        ? (filter.value as string) || "0"
-                        : "",
-                  })
-                }
-                className="rounded border border-gray-300 bg-white px-2 py-1 text-sm shadow-sm focus:border-purple-500 focus:ring-purple-500"
-              >
-                {(filter.columnType === "TEXT"
-                  ? TEXT_CONDITIONS
-                  : NUMBER_CONDITIONS
-                ).map((cond) => (
-                  <option key={cond.value} value={cond.value}>
-                    {cond.label}
-                  </option>
-                ))}
-              </select>
-              {/* Value Input */}
-              <div className="relative">
-                {filter.condition !== "isEmpty" &&
-                  filter.condition !== "isNotEmpty" && (
-                    <input
-                      type={filter.columnType === "NUMBER" ? "number" : "text"}
-                      value={String(filter.value ?? "")}
-                      onChange={(e) =>
-                        onUpdateFilter({ ...filter, value: e.target.value })
-                      }
-                      className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm shadow-sm focus:border-purple-500 focus:ring-purple-500"
-                      placeholder="Enter a value"
-                    />
-                  )}
+                  className="rounded border border-gray-300 bg-white px-2 py-1 text-sm shadow-sm focus:border-purple-500 focus:ring-purple-500"
+                >
+                  {(filter.columnType === "TEXT"
+                    ? TEXT_CONDITIONS
+                    : NUMBER_CONDITIONS
+                  ).map((cond) => (
+                    <option key={cond.value} value={cond.value}>
+                      {cond.label}
+                    </option>
+                  ))}
+                </select>
+                {/* Value Input */}
+                <div className="relative">
+                  {filter.condition !== "isEmpty" &&
+                    filter.condition !== "isNotEmpty" && (
+                      <input
+                        type={
+                          filter.columnType === "NUMBER" ? "number" : "text"
+                        }
+                        value={String(filter.value ?? "")}
+                        onChange={(e) =>
+                          onUpdateFilter({ ...filter, value: e.target.value })
+                        }
+                        className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm shadow-sm focus:border-purple-500 focus:ring-purple-500"
+                        placeholder="Enter a value"
+                      />
+                    )}
+                </div>
+                <button
+                  onClick={() => onRemoveFilter(filter.id)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X size={16} />
+                </button>
               </div>
-              <button
-                onClick={() => onRemoveFilter(filter.id)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X size={16} />
-              </button>
-            </div>
-          ))}
+            );
+          })}
 
-          <button
-            onClick={handleAddFilter}
-            disabled={relevantColumns.length === 0}
-            className="mt-2 text-sm font-medium text-blue-600 hover:text-blue-800 disabled:cursor-not-allowed disabled:text-gray-400"
-          >
-            + Add condition
-          </button>
+          {/* Only show the "Add condition" button if there are available columns */}
+          {availableColumns.length > 0 && (
+            <button
+              onClick={handleAddFilter}
+              disabled={relevantColumns.length === 0}
+              className="mt-2 text-sm font-medium text-blue-600 hover:text-blue-800 disabled:cursor-not-allowed disabled:text-gray-400"
+            >
+              + Add condition
+            </button>
+          )}
         </div>
       )}
     </div>

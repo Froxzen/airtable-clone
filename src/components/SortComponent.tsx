@@ -46,6 +46,11 @@ const SortComponent: React.FC<SortComponentProps> = ({
     return () => document.removeEventListener("mousedown", handleClick);
   }, [showSort, setShowSort, sortButtonRef]);
 
+  // Determine if there are any columns left to sort
+  const unsortedColumns = columns.filter(
+    (col) => !sorts.some((s) => s.columnId === col.id)
+  );
+
   return (
     <div className="relative inline-block">
       {sorts && sorts.length > 0 ? (
@@ -207,7 +212,8 @@ const SortComponent: React.FC<SortComponentProps> = ({
                 <div className="w-4"></div>
               </div>
             )}
-            {sorts.length > 0 && sorts.length < columns.length && (
+            {/* Only render the "Add another sort" button if there are unsorted columns */}
+            {unsortedColumns.length > 0 && (
               <button
                 onClick={() =>
                   setSorts((prev) => [

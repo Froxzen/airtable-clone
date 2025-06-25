@@ -1533,6 +1533,16 @@ const AirtableClone = () => {
     });
   };
 
+  // Helper to determine highlight type for a column
+  const getColumnHighlightType = (
+    colId: string
+  ): "filter-text" | "filter-number" | "sort" | null => {
+    if (textFilters.some((f) => f.columnId === colId)) return "filter-text";
+    if (numberFilters.some((f) => f.columnId === colId)) return "filter-number";
+    if (sorts.some((s) => s.columnId === colId)) return "sort";
+    return null;
+  };
+
   // =============================
   // Render: Main Component Output
   // =============================
@@ -1861,13 +1871,7 @@ const AirtableClone = () => {
                       return (
                         <th
                           key={col.id}
-                          className={`sticky top-0 z-10 h-10 w-48 flex-shrink-0 border-b border-r border-gray-200 bg-gray-50 px-3 text-left text-xs font-medium text-gray-700 ${
-                            isFiltered
-                              ? "bg-green-50 ring-2 ring-green-400"
-                              : isSorted
-                              ? "bg-orange-50 ring-2 ring-orange-300"
-                              : ""
-                          }`}
+                          className={`sticky top-0 z-10 h-10 w-48 flex-shrink-0 border-b border-r border-gray-200 bg-gray-50 px-3 text-left text-xs font-medium text-gray-700`}
                         >
                           <div className="flex h-full items-center space-x-2">
                             {col.type === "TEXT" ? (
@@ -1999,19 +2003,39 @@ const AirtableClone = () => {
                             expandedCell &&
                             expandedCell.row === rowIdx &&
                             expandedCell.col === colIdx;
-
+                          const highlightType = getColumnHighlightType(col.id);
+                          let highlightClass = "";
+                          if (highlightType === "filter-text")
+                            highlightClass = "bg-blue-100";
+                          else if (highlightType === "filter-number")
+                            highlightClass = "bg-green-100";
+                          else if (highlightType === "sort")
+                            highlightClass = "bg-yellow-100";
+                          // Only show blue border if selected or editing
+                          const borderClass =
+                            isSelected || isEditing
+                              ? "shadow-[inset_0_0_0_3px_#3b82f6]"
+                              : "";
+                          // Determine background color precedence
+                          let cellBgClass = highlightClass;
+                          if (cellMatchesSearch(value, searchTerm)) {
+                            cellBgClass =
+                              isSelected || isEditing
+                                ? "bg-yellow-200 " + borderClass
+                                : "bg-yellow-200";
+                          } else if (
+                            (isSelected || isEditing) &&
+                            highlightClass
+                          ) {
+                            // If selected/edited and filtered, use filter color (not white)
+                            cellBgClass = highlightClass + " " + borderClass;
+                          } else if (isSelected || isEditing) {
+                            cellBgClass = "bg-white " + borderClass;
+                          }
                           return (
                             <td
                               key={col.id}
-                              className={`relative flex h-10 w-48 flex-shrink-0 cursor-pointer items-center border-b border-r border-gray-200 px-3 ${
-                                cellMatchesSearch(value, searchTerm)
-                                  ? isSelected || isEditing
-                                    ? "bg-yellow-200 shadow-[inset_0_0_0_3px_#3b82f6]"
-                                    : "bg-yellow-200"
-                                  : isSelected || isEditing
-                                  ? "bg-white shadow-[inset_0_0_0_3px_#3b82f6]"
-                                  : ""
-                              }`}
+                              className={`relative flex h-10 w-48 flex-shrink-0 cursor-pointer items-center border-b border-r border-gray-200 px-3 ${cellBgClass}`}
                               onClick={() => handleCellClick(rowIdx, colIdx)}
                               onDoubleClick={() =>
                                 handleCellDoubleClick(rowIdx, colIdx)
