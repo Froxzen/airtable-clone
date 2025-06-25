@@ -22,6 +22,8 @@ const AddManyRowsButton: React.FC<AddManyRowsButtonProps> = ({
     },
   });
 
+  const [progress, setProgress] = React.useState(0);
+
   const handleAddManyRows = async () => {
     if (!tableId || isLoading) return;
     try {
@@ -35,9 +37,12 @@ const AddManyRowsButton: React.FC<AddManyRowsButtonProps> = ({
             }
           );
         });
+        setProgress(Math.round(((i + 1) / 20) * 100));
       }
+      setTimeout(() => setProgress(0), 1000); // Reset after short delay
     } catch (error) {
       // Error already logged in onError
+      setProgress(0);
     }
   };
 
@@ -53,7 +58,7 @@ const AddManyRowsButton: React.FC<AddManyRowsButtonProps> = ({
       {isLoading ? (
         <>
           <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-gray-900" />
-          Adding 100k rows...
+          Add 100k rows ({progress}%)
         </>
       ) : (
         <>

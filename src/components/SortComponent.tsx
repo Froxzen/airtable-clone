@@ -22,12 +22,6 @@ const SortComponent: React.FC<SortComponentProps> = ({
 }) => {
   const sortPopupRef = useRef<HTMLDivElement>(null);
 
-  // Compute available columns for new sort
-  const usedColumnIds = sorts.map((s) => s.columnId);
-  const availableColumns = columns.filter(
-    (col) => !usedColumnIds.includes(col.id)
-  );
-
   // Close popup on outside click
   useEffect(() => {
     if (!showSort) return;

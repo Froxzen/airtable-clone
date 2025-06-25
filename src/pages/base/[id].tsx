@@ -275,7 +275,7 @@ const AirtableClone = () => {
   const isFilterActive = allFilters.length > 0;
   const isClearActive = isSortActive || isFilterActive;
 
-  const PAGE_SIZE = 1000; // Optimized for fast scrolling - loads more data per request
+  const PAGE_SIZE = 5000; // Optimized for fast scrolling - loads more data per request
   const [showAddColumnPopup, setShowAddColumnPopup] = useState(false);
   const addColumnButtonRef = useRef<HTMLButtonElement>(null);
   const addColumnPopupRef = useRef<HTMLDivElement>(null);
@@ -520,7 +520,7 @@ const AirtableClone = () => {
       return;
     } // Load next page earlier when scrolling fast - trigger at 100 rows before end
     if (
-      lastItem.index >= processedRows.length - 200 &&
+      lastItem.index >= processedRows.length - 500 &&
       hasNextPage &&
       !isFetchingNextPage
     ) {
