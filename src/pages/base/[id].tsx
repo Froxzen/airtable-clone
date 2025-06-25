@@ -177,21 +177,15 @@ const AirtableClone = () => {
     sort: any | null;
   };
 
-  const {
-    data: gridViewsData,
-    refetch: refetchGridViews,
-    isLoading: isLoadingGridViews,
-  } = trpc.base.getGridViews.useQuery(
-    activeTableId ? { tableId: activeTableId } : { tableId: "" },
-    { enabled: !!activeTableId }
-  );
+  const { data: gridViewsData, refetch: refetchGridViews } =
+    trpc.base.getGridViews.useQuery(
+      activeTableId ? { tableId: activeTableId } : { tableId: "" },
+      { enabled: !!activeTableId }
+    );
   const createGridView = trpc.base.createGridView.useMutation({
     onSuccess: () => refetchGridViews(),
   });
   const updateGridView = trpc.base.updateGridView.useMutation({
-    onSuccess: () => refetchGridViews(),
-  });
-  const deleteGridView = trpc.base.deleteGridView.useMutation({
     onSuccess: () => refetchGridViews(),
   });
 
@@ -264,18 +258,6 @@ const AirtableClone = () => {
       if (gridViewsData[0]) setSelectedGridViewId(gridViewsData[0].id);
     }
   }, [activeTableId, gridViewsData]);
-
-  const handleAddGridView = () => {
-    if (!activeTableId) return;
-    // Default is always 'Grid view', so next is 'Grid view 2', etc.
-    const nextNumber = (gridViewsData ? gridViewsData.length : 1) + 1;
-    createGridView.mutate({
-      tableId: activeTableId,
-      name: `Grid view ${nextNumber}`,
-      filter: null,
-      sort: null,
-    });
-  };
 
   const handleSelectGridView = (id: string) => {
     setSelectedGridViewId(id);
@@ -706,36 +688,6 @@ const AirtableClone = () => {
       console.error("Failed to add table:", error);
     },
   });
-
-  const updateColumn = trpc.base.updateColumn.useMutation({
-    onMutate: async ({ columnId, name }) => {
-      // Cancel outgoing refetchs
-      await utils.base.getTable.cancel({ baseId });
-
-      // Snapshot previous value
-      const previousData = utils.base.getTable.getData({ baseId });
-
-      // Optimistically update cache
-      utils.base.getTable.setData({ baseId }, (old) =>
-        old
-          ? {
-              ...old,
-              columns: old.columns.map((col) =>
-                col.id === columnId ? { ...col, name } : col
-              ),
-            }
-          : old
-      );
-
-      return { previousData };
-    },
-    onError: (_, __, context) => {
-      // Rollback on error
-      if (context?.previousData) {
-        utils.base.getTable.setData({ baseId }, context.previousData);
-      }
-    },
-  });
   const addRow = trpc.base.addRow.useMutation({
     onMutate: async ({ data }) => {
       if (!activeTableId) return;
@@ -1085,27 +1037,19 @@ const AirtableClone = () => {
         filter: newFilter, // always array
       });
     }
-  }, [sorts, textFilters, numberFilters, selectedGridViewId, gridViewsData]);
+  }, [
+    sorts,
+    textFilters,
+    numberFilters,
+    selectedGridViewId,
+    gridViewsData,
+    updateGridView,
+  ]);
   // =============================
   // Mutations: Add/Update Table, Column, Row, Many Rows
   // =============================
 
   // Memoize views to prevent unnecessary re-renders
-  const views = useMemo(
-    () => [
-      { name: "Grid view", icon: Grid3X3, active: true },
-      { name: "Calendar", icon: Calendar },
-      { name: "Gallery", icon: BarChart3 },
-      { name: "Kanban", icon: BarChart3 },
-      { name: "Timeline", icon: Clock, badge: "Team" },
-      { name: "List", icon: FileText },
-      { name: "Gantt", icon: GanttChart, badge: "Team" },
-      { name: "New Section", badge: "Team" },
-      { name: "Form", icon: FileText },
-    ],
-    []
-  );
-
   useEffect(() => {
     if (selectedCell && !editingCell && wrapperRef.current) {
       wrapperRef.current.focus();
@@ -2098,7 +2042,9 @@ const AirtableClone = () => {
                                       }
                                       // Let Enter insert newlines natively
                                     }}
-                                    ref={(textarea) => {
+                                    ref={(
+                                      textarea: HTMLTextAreaElement | null
+                                    ) => {
                                       if (textarea && isExpandedEditing) {
                                         // Set cursor to end when textarea is first rendered
                                         setTimeout(() => {

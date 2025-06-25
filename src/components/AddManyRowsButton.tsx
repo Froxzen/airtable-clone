@@ -13,9 +13,9 @@ const AddManyRowsButton: React.FC<AddManyRowsButtonProps> = ({
 }) => {
   const utils = trpc.useUtils();
   const { mutate: addManyRows, isLoading } = trpc.base.addManyRows.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       // Optionally refetch or update cache here if needed
-      utils.base.getRowsInfinite.invalidate();
+      await utils.base.getRowsInfinite.invalidate();
     },
     onError: (error) => {
       console.error("Failed to add rows:", error);
@@ -28,7 +28,7 @@ const AddManyRowsButton: React.FC<AddManyRowsButtonProps> = ({
       for (let i = 0; i < 20; i++) {
         await new Promise<void>((resolve, reject) => {
           addManyRows(
-            { tableId, count: 26 },
+            { tableId, count: 5000 },
             {
               onSuccess: () => resolve(),
               onError: (error) => reject(error),
@@ -43,7 +43,9 @@ const AddManyRowsButton: React.FC<AddManyRowsButtonProps> = ({
 
   return (
     <button
-      onClick={handleAddManyRows}
+      onClick={() => {
+        void handleAddManyRows();
+      }}
       disabled={disabled || isLoading || !tableId}
       className="flex items-center gap-1 rounded bg-white px-3 py-1 text-sm font-medium text-gray-600 shadow hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
       type="button"

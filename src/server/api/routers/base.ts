@@ -24,6 +24,21 @@ const sortArraySchema = z.array(sortSchema);
 
 export type Filter = z.infer<typeof filterSchema>;
 
+// --- Types for row data ---
+type RowWithData = {
+  id: string;
+  tableId: string;
+  data: Record<string, unknown> | null;
+};
+
+// Helper to ensure data is a plain object
+function ensureObject(val: unknown): Record<string, unknown> {
+  if (val && typeof val === "object" && !Array.isArray(val)) {
+    return val as Record<string, unknown>;
+  }
+  return {};
+}
+
 export const baseRouter = createTRPCRouter({
   getAll: protectedProcedure.query(async ({ ctx }) => {
     return ctx.prisma.base.findMany({
@@ -447,7 +462,7 @@ export const baseRouter = createTRPCRouter({
       if (!hasComplexQuery) {
         // Simple case: just fetch by ID with cursor pagination
         // Only select necessary fields for better performance
-        const rows = await ctx.prisma.row.findMany({
+        const rowsRaw = await ctx.prisma.row.findMany({
           where,
           select: {
             id: true,
@@ -459,6 +474,10 @@ export const baseRouter = createTRPCRouter({
           cursor: cursor ? { id: cursor } : undefined,
           take: limit + 1,
         });
+        const rows: RowWithData[] = rowsRaw.map((row) => ({
+          ...row,
+          data: ensureObject(row.data),
+        }));
 
         let nextCursor: string | undefined = undefined;
         if (rows.length > limit) {
@@ -473,11 +492,11 @@ export const baseRouter = createTRPCRouter({
       }
 
       // Handle sorting
-      let rows: any[] = [];
+      let rows: RowWithData[] = [];
       if (sortConfig && sortConfig.length > 0) {
         // If sorting is requested, fetch all filtered rows (up to a safe max)
         const fetchLimit = 1000010; // You can adjust this limit as needed
-        rows = await ctx.prisma.row.findMany({
+        const rowsRaw = await ctx.prisma.row.findMany({
           where,
           select: {
             id: true,
@@ -488,12 +507,16 @@ export const baseRouter = createTRPCRouter({
           // Do NOT use cursor/take here, we paginate after sorting
           take: fetchLimit,
         });
+        rows = rowsRaw.map((row) => ({
+          ...row,
+          data: ensureObject(row.data),
+        }));
         // Sort in JS
         rows = rows.sort((a, b) => {
           for (const sort of sortConfig) {
             const { columnId, direction } = sort;
-            const aData = a.data as Record<string, unknown>;
-            const bData = b.data as Record<string, unknown>;
+            const aData = a.data ?? {};
+            const bData = b.data ?? {};
             const aVal = aData[columnId];
             const bVal = bData[columnId];
             // Find column type for proper comparison
@@ -540,7 +563,7 @@ export const baseRouter = createTRPCRouter({
         };
       } else {
         // No sorting: use DB pagination for performance
-        rows = await ctx.prisma.row.findMany({
+        const rowsRaw = await ctx.prisma.row.findMany({
           where,
           select: {
             id: true,
@@ -551,6 +574,10 @@ export const baseRouter = createTRPCRouter({
           cursor: cursor ? { id: cursor } : undefined,
           take: limit + 1,
         });
+        rows = rowsRaw.map((row) => ({
+          ...row,
+          data: ensureObject(row.data),
+        }));
         let nextCursor: string | undefined = undefined;
         if (rows.length > limit) {
           const nextItem = rows.pop();
