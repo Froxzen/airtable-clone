@@ -1656,6 +1656,14 @@ const AirtableClone = () => {
             setTextFilters([]);
             setNumberFilters([]);
             setShowSort(false);
+            // Also update backend for current grid view
+            if (selectedGridViewId) {
+              updateGridView.mutate({
+                id: selectedGridViewId,
+                sort: [],
+                filter: [],
+              });
+            }
           }}
           title="Clear sorting and filters"
           type="button"
@@ -2269,6 +2277,12 @@ const AirtableClone = () => {
             value={newGridViewName}
             onChange={(e) => setNewGridViewName(e.target.value)}
             autoFocus
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && newGridViewName.trim()) {
+                e.preventDefault();
+                handleCreateGridView();
+              }
+            }}
           />
           <div className="flex justify-end gap-2">
             <button
