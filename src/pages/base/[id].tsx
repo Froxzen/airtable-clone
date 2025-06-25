@@ -6,11 +6,6 @@ import {
   Check,
   Plus,
   Grid3X3,
-  Calendar,
-  BarChart3,
-  Clock,
-  GanttChart,
-  FileText,
   ChevronDown,
   Settings,
   Search,
@@ -170,13 +165,6 @@ const AirtableClone = () => {
   // =============================
   // Grid Views State & Handlers (per-table)
   // =============================
-  type GridView = {
-    id: string;
-    name: string;
-    filter: any | null;
-    sort: any | null;
-  };
-
   const { data: gridViewsData, refetch: refetchGridViews } =
     trpc.base.getGridViews.useQuery(
       activeTableId ? { tableId: activeTableId } : { tableId: "" },
@@ -257,7 +245,7 @@ const AirtableClone = () => {
     ) {
       if (gridViewsData[0]) setSelectedGridViewId(gridViewsData[0].id);
     }
-  }, [activeTableId, gridViewsData]);
+  }, [activeTableId, gridViewsData, selectedGridViewId]);
 
   const handleSelectGridView = (id: string) => {
     setSelectedGridViewId(id);
@@ -1805,13 +1793,6 @@ const AirtableClone = () => {
                       #
                     </th>
                     {base?.columns?.map((col: Column) => {
-                      const isFiltered =
-                        (textFilters &&
-                          textFilters.some((f) => f.columnId === col.id)) ||
-                        (numberFilters &&
-                          numberFilters.some((f) => f.columnId === col.id));
-                      const isSorted =
-                        sorts && sorts.some((s) => s.columnId === col.id);
                       return (
                         <th
                           key={col.id}
