@@ -262,23 +262,11 @@ export const baseRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       // Find all columns for this table
-      const columns = await ctx.prisma.column.findMany({
-        where: { tableId: input.tableId },
-      });
-
-      // Build SQL column values
-      const sqlCols: Record<string, any> = {};
-      for (const col of columns) {
-        const colName = `col_${col.id.replace(/-/g, "_")}`;
-        sqlCols[colName] = input.data[col.id] ?? null;
-      }
-
-      // Insert row with both JSON and SQL columns
+      // (No need to build sqlCols for create, only for update if you have dynamic columns in your schema)
       return ctx.prisma.row.create({
         data: {
           tableId: input.tableId,
           data: input.data,
-          ...sqlCols,
         },
       });
     }),
@@ -601,7 +589,6 @@ export const baseRouter = createTRPCRouter({
         where: { id: input.rowId },
         data: {
           data: input.data,
-          ...sqlCols,
         },
       });
     }),

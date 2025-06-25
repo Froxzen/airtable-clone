@@ -1301,7 +1301,7 @@ const AirtableClone = () => {
     if (!row || !col) return;
     const value = getCellValue(row, col.id);
     setEditingCell({ row: rowIdx, col: colIdx });
-    setSortingFrozen(true);
+    if (sorts && sorts.length > 0) setSortingFrozen(true); // Freeze table if sorts are active
     wrapperRef.current?.blur();
     // If value contains a newline, open expanded mode immediately
     if (typeof value === "string" && value.includes("\n")) {
@@ -1504,10 +1504,27 @@ const AirtableClone = () => {
     if (sortingUnfreezeTimeout.current) {
       clearTimeout(sortingUnfreezeTimeout.current);
     }
+    if (sorts && sorts.length > 0) {
+      setSortingFrozen(false); // Unfreeze and re-apply sorts
+    }
     sortingUnfreezeTimeout.current = setTimeout(() => {
       setSortingFrozen(false);
     }, 1000);
   };
+
+  // Freeze table when entering editing mode (any cell)
+  useEffect(() => {
+    if (editingCell) {
+      setSortingFrozen(true);
+    }
+  }, [editingCell]);
+
+  // Unfreeze table when exiting editing mode
+  useEffect(() => {
+    if (!editingCell) {
+      setSortingFrozen(false);
+    }
+  }, [editingCell]);
 
   // Handle sign out
   const handleSignOut = () => {
@@ -1807,7 +1824,18 @@ const AirtableClone = () => {
             ref={wrapperRef}
             className="flex-1 overflow-x-auto focus:outline-none"
             tabIndex={0}
-            onKeyDown={editingCell ? undefined : handleKeyDown}
+            onKeyDown={
+              editingCell
+                ? undefined
+                : (e) => {
+                    if (e.shiftKey && e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddRow();
+                      return;
+                    }
+                    handleKeyDown(e);
+                  }
+            }
           >
             {" "}
             {/* Vertically scrolling container */}
