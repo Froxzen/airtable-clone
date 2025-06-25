@@ -72,60 +72,7 @@ const AirtableClone = () => {
   // =============================
   // Effects: Load/Persist Filters, Sorts, Table Selection
   // =============================
-  useEffect(() => {
-    if (!baseId) return;
 
-    const persistedTextFilters = localStorage.getItem(`textFilters_${baseId}`);
-    const persistedNumberFilters = localStorage.getItem(
-      `numberFilters_${baseId}`
-    );
-    const persistedSorts = localStorage.getItem(`sorts_${baseId}`);
-    if (persistedTextFilters) {
-      try {
-        const parsed = JSON.parse(persistedTextFilters) as FilterType[];
-        setTextFilters(parsed);
-      } catch (e) {
-        console.error("Failed to parse persisted text filters:", e);
-      }
-    }
-
-    if (persistedNumberFilters) {
-      try {
-        const parsed = JSON.parse(persistedNumberFilters) as FilterType[];
-        setNumberFilters(parsed);
-      } catch (e) {
-        console.error("Failed to parse persisted number filters:", e);
-      }
-    }
-
-    if (persistedSorts) {
-      try {
-        const parsed = JSON.parse(persistedSorts) as Sort[];
-        setSorts(parsed);
-      } catch (e) {
-        console.error("Failed to parse persisted sorts:", e);
-      }
-    }
-  }, [baseId]);
-
-  // Persist filters and sorts whenever they change
-  useEffect(() => {
-    if (!baseId) return;
-    localStorage.setItem(`textFilters_${baseId}`, JSON.stringify(textFilters));
-  }, [baseId, textFilters]);
-
-  useEffect(() => {
-    if (!baseId) return;
-    localStorage.setItem(
-      `numberFilters_${baseId}`,
-      JSON.stringify(numberFilters)
-    );
-  }, [baseId, numberFilters]);
-
-  useEffect(() => {
-    if (!baseId) return;
-    localStorage.setItem(`sorts_${baseId}`, JSON.stringify(sorts));
-  }, [baseId, sorts]);
   const [showSort, setShowSort] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const sortPopupRef = useRef<HTMLDivElement>(null);
@@ -426,32 +373,14 @@ const AirtableClone = () => {
       ) ?? [],
     [infiniteData]
   );
-  // Helper function to highlight search matches
-  const highlightSearchMatch = (text: string, searchTerm: string) => {
-    if (!searchTerm.trim()) return text;
 
-    const escapedSearchTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const regex = new RegExp(`(${escapedSearchTerm})`, "gi");
-    const parts = text.split(regex);
-
-    return parts.map((part, index) =>
-      index % 2 === 1 ? (
-        <span key={index} className="rounded bg-yellow-200">
-          {part}
-        </span>
-      ) : (
-        part
-      )
-    );
-  };
   // Helper function to check if cell matches search
   const cellMatchesSearch = (value: string, searchTerm: string): boolean => {
     if (!searchTerm.trim()) return false;
     return value.toLowerCase().includes(searchTerm.toLowerCase());
   };
 
-  // Single computed variable that handles all filtering, sorting, and searching
-  // Single computed variable that handles all filtering, sorting, and searching
+  // Single computed variable that handles filtering and searched
   const processedRows = useMemo(() => {
     if (!allRows.length) return [];
 
@@ -2098,7 +2027,7 @@ const AirtableClone = () => {
                                           row: rowIdx,
                                           col: colIdx,
                                         });
-                                        setExpandedCellValue(newValue); // Preserve newlines
+                                        setExpandedCellValue(newValue);
                                       } else if (e.key === "Escape") {
                                         e.preventDefault();
                                         handleEditEnd();
@@ -2128,9 +2057,7 @@ const AirtableClone = () => {
                                 )
                               ) : (
                                 <div className="truncate text-sm text-gray-700">
-                                  {searchTerm.trim()
-                                    ? highlightSearchMatch(value, searchTerm)
-                                    : value}
+                                  {value}
                                 </div>
                               )}
                             </td>
