@@ -608,8 +608,8 @@ export const baseRouter = createTRPCRouter({
       const sqlCols: Record<string, unknown> = {};
       for (const col of columns) {
         const colName = `col_${col.id.replace(/-/g, "_")}`;
-        const rawValue = input.data[col.id];
-        const value =
+        const rawValue: unknown = input.data[col.id];
+        const value: string | number | null =
           typeof rawValue === "string" ||
           typeof rawValue === "number" ||
           rawValue === null
