@@ -1,4 +1,10 @@
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useMemo,
+  useCallback,
+} from "react";
 import { trpc } from "~/utils/api";
 import { useRouter } from "next/router";
 import { useSession, signOut } from "next-auth/react";
@@ -85,6 +91,14 @@ const AirtableClone = () => {
   const [animatingOutRowIds, setAnimatingOutRowIds] = useState<Set<string>>(
     new Set()
   );
+
+  // Add state to track if we're currently creating many rows
+  const [isCreatingManyRows, setIsCreatingManyRows] = useState(false);
+
+  // Auto-fetch timer for when creating many rows
+  const autoFetchTimer = useRef<NodeJS.Timeout | null>(null);
+
+  // TODO: Auto-fetch effect will be added after infinite query declaration
 
   // Fetch base with all tables
   const { data: baseWithTables } = trpc.base.getById.useQuery(
@@ -309,6 +323,31 @@ const AirtableClone = () => {
   // =============================
   // Data Fetching: Base, Table, Rows
   // =============================
+
+  // Effect to handle auto-fetching during row creation
+  useEffect(() => {
+    if (isCreatingManyRows) {
+      // Start periodic fetching every 2 seconds
+      autoFetchTimer.current = setInterval(() => {
+        if (hasNextPage && !isFetchingNextPage) {
+          void fetchNextPage();
+        }
+      }, 2000);
+    } else {
+      // Clear timer when not creating rows
+      if (autoFetchTimer.current) {
+        clearInterval(autoFetchTimer.current);
+        autoFetchTimer.current = null;
+      }
+    }
+
+    // Cleanup on unmount
+    return () => {
+      if (autoFetchTimer.current) {
+        clearInterval(autoFetchTimer.current);
+      }
+    };
+  }, [isCreatingManyRows, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const handleAddTextFilter = (filter: Omit<FilterType, "id">) => {
     setTextFilters((prev) => [
@@ -571,14 +610,32 @@ const AirtableClone = () => {
     return () => container.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // Callback to trigger fetching new pages when batches are completed
+  const handleBatchComplete = useCallback(() => {
+    // Trigger fetching of next page to show new rows immediately
+    if (hasNextPage && !isFetchingNextPage) {
+      void fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  // Callback to track creation state
+  const handleCreationStateChange = useCallback((isCreating: boolean) => {
+    setIsCreatingManyRows(isCreating);
+  }, []);
+
   // Infinite scroll logic
   useEffect(() => {
     const lastItem = virtualItems[virtualItems.length - 1];
     if (!lastItem) {
       return;
-    } // Load next page earlier when scrolling fast - trigger at 100 rows before end
+    }
+
+    // If we're creating many rows, fetch next page more aggressively
+    const shouldFetchAggressively = isCreatingManyRows;
+    const triggerDistance = shouldFetchAggressively ? 1000 : 500; // More aggressive when creating rows
+
     if (
-      lastItem.index >= processedRows.length - 500 &&
+      lastItem.index >= processedRows.length - triggerDistance &&
       hasNextPage &&
       !isFetchingNextPage
     ) {
@@ -590,6 +647,7 @@ const AirtableClone = () => {
     hasNextPage,
     isFetchingNextPage,
     fetchNextPage,
+    isCreatingManyRows,
   ]);
 
   // =============================
@@ -1598,7 +1656,12 @@ const AirtableClone = () => {
           Controls Bar: Sort, Filter, Search
       ============================= */}
       <div className="flex items-center gap-4 border-b border-gray-200 bg-purple-50 px-4 py-3">
-        <AddManyRowsButton tableId={activeTableId} disabled={!base} />
+        <AddManyRowsButton
+          tableId={activeTableId}
+          disabled={!base}
+          onBatchComplete={handleBatchComplete}
+          onCreationStateChange={handleCreationStateChange}
+        />
         {/* Filter/Sort Indicators */}
         <SortComponent
           columns={base?.columns || []}
@@ -2139,6 +2202,7 @@ const AirtableClone = () => {
         <span className="text-xs text-gray-500">
           {allRows.length} records
           {isFetchingNextPage ? " (loading more...)" : ""}
+          {isCreatingManyRows ? " • Auto-fetching new rows..." : ""}
         </span>
       </div>
       {/* =============================

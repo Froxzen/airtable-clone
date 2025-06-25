@@ -5,17 +5,23 @@ import { trpc } from "../utils/api";
 interface AddManyRowsButtonProps {
   tableId: string | null;
   disabled?: boolean;
+  onBatchComplete?: () => void; // Callback to trigger fetching new pages
+  onCreationStateChange?: (isCreating: boolean) => void; // Callback to track creation state
 }
 
 const AddManyRowsButton: React.FC<AddManyRowsButtonProps> = ({
   tableId,
   disabled,
+  onBatchComplete,
+  onCreationStateChange,
 }) => {
   const utils = trpc.useUtils();
   const { mutate: addManyRows, isLoading } = trpc.base.addManyRows.useMutation({
     onSuccess: async () => {
       // Optionally refetch or update cache here if needed
       await utils.base.getRowsInfinite.invalidate();
+      // Call the callback to trigger fetching new pages
+      onBatchComplete?.();
     },
     onError: (error) => {
       console.error("Failed to add rows:", error);
@@ -26,6 +32,10 @@ const AddManyRowsButton: React.FC<AddManyRowsButtonProps> = ({
 
   const handleAddManyRows = async () => {
     if (!tableId || isLoading) return;
+
+    // Notify parent that we're starting to create many rows
+    onCreationStateChange?.(true);
+
     try {
       for (let i = 0; i < 20; i++) {
         await new Promise<void>((resolve, reject) => {
@@ -43,6 +53,9 @@ const AddManyRowsButton: React.FC<AddManyRowsButtonProps> = ({
     } catch (error) {
       // Error already logged in onError
       setProgress(0);
+    } finally {
+      // Notify parent that we're done creating many rows
+      onCreationStateChange?.(false);
     }
   };
 
