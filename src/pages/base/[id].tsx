@@ -26,6 +26,7 @@ const AirtableClone = () => {
   // =============================
   // State and Refs
   // =============================
+
   const router = useRouter();
   const baseId = router.query.id as string;
   const [activeTableId, setActiveTableId] = useState<string | null>(null);
@@ -500,6 +501,11 @@ const AirtableClone = () => {
     return rows;
   }, [allRows, allFilters, sorts, base?.columns, tempRowIds, sortingFrozen]);
 
+  // Create a stable key for the virtualizer to prevent unnecessary re-renders
+  const virtualizerKey = useMemo(() => {
+    return `${allFilters.length}-${sorts.length}-${searchTerm}-${processedRows.length}`;
+  }, [allFilters.length, sorts.length, searchTerm, processedRows.length]);
+
   // =============================
   // Virtualization Setup
   // =============================
@@ -510,10 +516,62 @@ const AirtableClone = () => {
     estimateSize: () => 40,
     getScrollElement: () => tableContainerRef.current,
     overscan: 25, // Increased for smoother fast scrolling
+    // Preserve scroll position when data changes
+    scrollToFn: (offset, options) => {
+      if (tableContainerRef.current) {
+        tableContainerRef.current.scrollTo({
+          top: offset,
+          ...options,
+        });
+      }
+    },
   });
 
   const virtualItems = rowVirtualizer.getVirtualItems();
 
+  // Preserve scroll position when filters/sorts change
+  const lastScrollTop = useRef(0);
+  const isScrolling = useRef(false);
+
+  useEffect(() => {
+    if (tableContainerRef.current && !isScrolling.current) {
+      lastScrollTop.current = tableContainerRef.current.scrollTop;
+    }
+  }, [allFilters, sorts]);
+
+  // Restore scroll position after data changes
+  useEffect(() => {
+    if (tableContainerRef.current && lastScrollTop.current > 0) {
+      // Use requestAnimationFrame to ensure DOM is updated
+      requestAnimationFrame(() => {
+        if (tableContainerRef.current) {
+          isScrolling.current = true;
+          tableContainerRef.current.scrollTop = lastScrollTop.current;
+          // Reset the flag after a short delay
+          setTimeout(() => {
+            isScrolling.current = false;
+          }, 100);
+        }
+      });
+    }
+  }, [processedRows.length]);
+
+  // Add scroll event listener to track manual scrolling
+  useEffect(() => {
+    const container = tableContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      if (!isScrolling.current) {
+        lastScrollTop.current = container.scrollTop;
+      }
+    };
+
+    container.addEventListener("scroll", handleScroll);
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Infinite scroll logic
   useEffect(() => {
     const lastItem = virtualItems[virtualItems.length - 1];
     if (!lastItem) {
@@ -533,6 +591,7 @@ const AirtableClone = () => {
     isFetchingNextPage,
     fetchNextPage,
   ]);
+
   // =============================
   // Handlers: Filters, Sorts, Search, Columns, Rows
   // =============================
@@ -1786,6 +1845,7 @@ const AirtableClone = () => {
                 </thead>
                 {/* Table Body */}
                 <tbody
+                  key={virtualizerKey}
                   style={{
                     height: `${rowVirtualizer.getTotalSize()}px`,
                     position: "relative",
