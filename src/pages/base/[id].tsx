@@ -619,7 +619,7 @@ const AirtableClone = () => {
     const lastItem = virtualItems[virtualItems.length - 1];
     if (!lastItem) {
       return;
-    } // Load next page earlier when scrolling fast - trigger at 100 rows before end 
+    } // Load next page earlier when scrolling fast - trigger at 100 rows before end
     if (
       lastItem.index >= processedRows.length - 100 &&
       hasNextPage &&
@@ -1934,7 +1934,11 @@ const AirtableClone = () => {
                     const isTemporary = tempRowIds.has(row.id);
                     return (
                       <tr
-                        key={row.id}
+                        key={
+                          row.id.startsWith("temp-row-")
+                            ? `temp-${row.id}`
+                            : `row-${row.id}`
+                        }
                         className={`flex transition-all duration-300 hover:bg-gray-50 ${
                           isAnimatingOut
                             ? "translate-y-[-20px] transform opacity-0"

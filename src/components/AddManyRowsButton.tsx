@@ -28,7 +28,7 @@ const AddManyRowsButton: React.FC<AddManyRowsButtonProps> = ({
       for (let i = 0; i < 20; i++) {
         await new Promise<void>((resolve, reject) => {
           addManyRows(
-            { tableId, count: 5000 },
+            { tableId, count: 26 },
             {
               onSuccess: () => resolve(),
               onError: (error) => reject(error),

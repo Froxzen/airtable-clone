@@ -139,20 +139,30 @@ const SortComponent: React.FC<SortComponentProps> = ({
                   >
                     {isInitial ? (
                       <option value="">A → Z / 1 → 9</option>
-                    ) : (() => {
-                      const col = columns.find((c) => c.id === sort.columnId);
-                      if (col?.type === "NUMBER") {
-                        return [
-                          <option key="asc" value="asc">1 → 9</option>,
-                          <option key="desc" value="desc">9 → 1</option>,
-                        ];
-                      } else {
-                        return [
-                          <option key="asc" value="asc">A → Z</option>,
-                          <option key="desc" value="desc">Z → A</option>,
-                        ];
-                      }
-                    })()}
+                    ) : (
+                      (() => {
+                        const col = columns.find((c) => c.id === sort.columnId);
+                        if (col?.type === "NUMBER") {
+                          return [
+                            <option key="asc" value="asc">
+                              1 → 9
+                            </option>,
+                            <option key="desc" value="desc">
+                              9 → 1
+                            </option>,
+                          ];
+                        } else {
+                          return [
+                            <option key="asc" value="asc">
+                              A → Z
+                            </option>,
+                            <option key="desc" value="desc">
+                              Z → A
+                            </option>,
+                          ];
+                        }
+                      })()
+                    )}
                   </select>
                   <button
                     onClick={() =>

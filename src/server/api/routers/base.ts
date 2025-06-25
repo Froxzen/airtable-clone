@@ -219,7 +219,8 @@ export const baseRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.column.create({
+      // 1. Create the column in the columns table
+      const column = await ctx.prisma.column.create({
         data: {
           tableId: input.tableId,
           name: input.name,
@@ -227,6 +228,16 @@ export const baseRouter = createTRPCRouter({
           type: input.type,
         },
       });
+
+      // 2. Dynamically add a SQL column to the Row table
+      // Use TEXT for TEXT columns, DOUBLE PRECISION for NUMBER columns
+      const sqlType = input.type === "NUMBER" ? "DOUBLE PRECISION" : "TEXT";
+      const colName = `col_${column.id.replace(/-/g, "_")}`;
+      await ctx.prisma.$executeRawUnsafe(
+        `ALTER TABLE "Row" ADD COLUMN IF NOT EXISTS "${colName}" ${sqlType};`
+      );
+
+      return column;
     }),
 
   updateColumn: protectedProcedure
@@ -250,10 +261,24 @@ export const baseRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      // Find all columns for this table
+      const columns = await ctx.prisma.column.findMany({
+        where: { tableId: input.tableId },
+      });
+
+      // Build SQL column values
+      const sqlCols: Record<string, any> = {};
+      for (const col of columns) {
+        const colName = `col_${col.id.replace(/-/g, "_")}`;
+        sqlCols[colName] = input.data[col.id] ?? null;
+      }
+
+      // Insert row with both JSON and SQL columns
       return ctx.prisma.row.create({
         data: {
           tableId: input.tableId,
           data: input.data,
+          ...sqlCols,
         },
       });
     }),
@@ -460,34 +485,32 @@ export const baseRouter = createTRPCRouter({
       }
 
       // Handle sorting
-      const orderBy: Prisma.RowOrderByWithRelationInput[] = [{ id: "asc" }];
-      const fetchLimit = Math.min(limit * 10, 5000); // Fetch at most 5000 rows for sorting
-
-      const rows = await ctx.prisma.row.findMany({
-        where,
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        orderBy,
-        cursor: cursor ? { id: cursor } : undefined,
-        take: fetchLimit + 1, // get extra items for sorting and pagination
-      });
-
-      // Apply sorting in JavaScript since Prisma JSON field sorting is limited
-      let sortedRows = rows;
+      let rows: any[] = [];
       if (sortConfig && sortConfig.length > 0) {
-        sortedRows = [...rows].sort((a, b) => {
+        // If sorting is requested, fetch all filtered rows (up to a safe max)
+        const fetchLimit = 1000010; // You can adjust this limit as needed
+        rows = await ctx.prisma.row.findMany({
+          where,
+          select: {
+            id: true,
+            tableId: true,
+            data: true,
+          },
+          orderBy: [{ id: "asc" }], // deterministic order for slicing
+          // Do NOT use cursor/take here, we paginate after sorting
+          take: fetchLimit,
+        });
+        // Sort in JS
+        rows = rows.sort((a, b) => {
           for (const sort of sortConfig) {
             const { columnId, direction } = sort;
-
-            // Extract values from JSON data
             const aData = a.data as Record<string, unknown>;
             const bData = b.data as Record<string, unknown>;
             const aVal = aData[columnId];
             const bVal = bData[columnId];
-
             // Find column type for proper comparison
             const column = columns.find((c) => c.id === columnId);
             let comparison = 0;
-
             if (column?.type === "NUMBER") {
               const aNum =
                 aVal === null || aVal === undefined || aVal === ""
@@ -501,40 +524,85 @@ export const baseRouter = createTRPCRouter({
                 comparison = aNum - bNum;
               }
             } else {
-              // Text comparison
               const aStr = (aVal ?? "").toString().toLowerCase();
               const bStr = (bVal ?? "").toString().toLowerCase();
               if (aStr < bStr) comparison = -1;
               if (aStr > bStr) comparison = 1;
             }
-
             if (comparison !== 0) {
               return direction === "asc" ? comparison : -comparison;
             }
           }
           return 0;
         });
+        // Paginate in JS
+        let startIdx = 0;
+        if (cursor) {
+          const idx = rows.findIndex((row) => row.id === cursor);
+          startIdx = idx >= 0 ? idx + 1 : 0;
+        }
+        const pagedRows = rows.slice(startIdx, startIdx + limit);
+        const nextCursor =
+          rows.length > startIdx + limit
+            ? pagedRows[pagedRows.length - 1]?.id
+            : undefined;
+        return {
+          rows: pagedRows,
+          nextCursor,
+        };
+      } else {
+        // No sorting: use DB pagination for performance
+        rows = await ctx.prisma.row.findMany({
+          where,
+          select: {
+            id: true,
+            tableId: true,
+            data: true,
+          },
+          orderBy: [{ id: "asc" }],
+          cursor: cursor ? { id: cursor } : undefined,
+          take: limit + 1,
+        });
+        let nextCursor: string | undefined = undefined;
+        if (rows.length > limit) {
+          const nextItem = rows.pop();
+          nextCursor = nextItem?.id;
+        }
+        return {
+          rows,
+          nextCursor,
+        };
       }
-      let nextCursor: string | undefined = undefined;
-      if (sortedRows.length > limit) {
-        // Take only the requested number of rows
-        const returnRows = sortedRows.slice(0, limit);
-        const nextItem = sortedRows[limit];
-        nextCursor = nextItem?.id;
-        sortedRows = returnRows;
-      }
-
-      return {
-        rows: sortedRows,
-        nextCursor,
-      };
     }),
   updateRow: protectedProcedure
     .input(z.object({ rowId: z.string(), data: z.record(z.string(), z.any()) }))
     .mutation(async ({ ctx, input }) => {
+      // Find the row to get tableId
+      const row = await ctx.prisma.row.findUnique({
+        where: { id: input.rowId },
+        select: { tableId: true },
+      });
+      if (!row) throw new Error("Row not found");
+
+      // Find all columns for this table
+      const columns = await ctx.prisma.column.findMany({
+        where: { tableId: row.tableId },
+      });
+
+      // Build SQL column values
+      const sqlCols: Record<string, any> = {};
+      for (const col of columns) {
+        const colName = `col_${col.id.replace(/-/g, "_")}`;
+        sqlCols[colName] = input.data[col.id] ?? null;
+      }
+
+      // Update row with both JSON and SQL columns
       return ctx.prisma.row.update({
         where: { id: input.rowId },
-        data: { data: input.data },
+        data: {
+          data: input.data,
+          ...sqlCols,
+        },
       });
     }),
   // --- GRID VIEW CRUD ---
