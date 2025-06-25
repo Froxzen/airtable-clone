@@ -1775,7 +1775,7 @@ const AirtableClone = () => {
                       handleAddRow();
                       return;
                     }
-                    handleKeyDown(e);
+                    void handleKeyDown(e);
                   }
             }
           >
@@ -2084,7 +2084,7 @@ const AirtableClone = () => {
                                         e.preventDefault();
                                         handleEditEnd();
                                       } else if (e.key === "Tab") {
-                                        e.preventDefault();
+                                                                               e.preventDefault();
                                         if (editingCell && base) {
                                           const { row, col } = editingCell;
                                           if (col < base.columns.length - 1) {

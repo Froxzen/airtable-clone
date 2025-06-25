@@ -608,12 +608,15 @@ export const baseRouter = createTRPCRouter({
       const sqlCols: Record<string, unknown> = {};
       for (const col of columns) {
         const colName = `col_${col.id.replace(/-/g, "_")}`;
-        const value = input.data[col.id];
-        // Only allow string, number, or null for SQL columns
-        sqlCols[colName] =
-          typeof value === "string" || typeof value === "number" || value === null
-            ? value
+        const rawValue = input.data[col.id];
+        const value =
+          typeof rawValue === "string" ||
+          typeof rawValue === "number" ||
+          rawValue === null
+            ? rawValue
             : null;
+        // Only allow string, number, or null for SQL columns
+        sqlCols[colName] = value;
       }
 
       // Update row with both JSON and SQL columns
