@@ -1002,11 +1002,13 @@ const AirtableClone = () => {
   }, [selectedGridViewId, gridViewsData]);
 
   // Save sorts/filters to backend when they change for the current grid view
+  const lastSyncedSorts = useRef<string>("");
+  const lastSyncedFilters = useRef<string>("");
+
   useEffect(() => {
     if (!selectedGridViewId || !gridViewsData) return;
     const selectedView = gridViewsData.find((v) => v.id === selectedGridViewId);
     if (!selectedView) return;
-    // Always send arrays for both sorts and filters
     const newSort = sorts.filter(isSort);
     const newFilter = [...textFilters, ...numberFilters].filter(isFilter);
     const backendSort = Array.isArray(selectedView.sort)
@@ -1015,15 +1017,24 @@ const AirtableClone = () => {
     const backendFilter = Array.isArray(selectedView.filter)
       ? selectedView.filter.filter(isFilter)
       : [];
+    const newSortStr = JSON.stringify(newSort);
+    const newFilterStr = JSON.stringify(newFilter);
+    const backendSortStr = JSON.stringify(backendSort);
+    const backendFilterStr = JSON.stringify(backendFilter);
+
+    // Only update if local and backend are different, and not already just sent
     if (
-      JSON.stringify(backendSort) !== JSON.stringify(newSort) ||
-      JSON.stringify(backendFilter) !== JSON.stringify(newFilter)
+      (backendSortStr !== newSortStr || backendFilterStr !== newFilterStr) &&
+      (lastSyncedSorts.current !== newSortStr ||
+        lastSyncedFilters.current !== newFilterStr)
     ) {
       updateGridView.mutate({
         id: selectedGridViewId,
-        sort: newSort, // always array
-        filter: newFilter, // always array
+        sort: newSort,
+        filter: newFilter,
       });
+      lastSyncedSorts.current = newSortStr;
+      lastSyncedFilters.current = newFilterStr;
     }
   }, [
     sorts,
