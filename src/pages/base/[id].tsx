@@ -27,6 +27,9 @@ import FilterComponent from "~/components/FilterComponent";
 import AddManyRowsButton from "../../components/AddManyRowsButton";
 import SortComponent from "../../components/SortComponent";
 import SearchBar from "../../components/SearchBar";
+import BaseHeader from "../../components/BaseHeader";
+import TableTabsBar from "../../components/TableTabsBar";
+import GridViewTabsBar from "../../components/GridViewTabsBar";
 
 const AirtableClone = () => {
   // =============================
@@ -1566,57 +1569,14 @@ const AirtableClone = () => {
       {/* =============================
           Main Header
       ============================= */}
-      <div
-        className={`flex h-16 items-center px-6 py-4 text-sm text-white ${
-          getBaseColor ?? "bg-purple-500"
-        }`}
-      >
-        <div className="flex items-center space-x-4">
-          <Image
-            src="/logo.svg"
-            alt="Logo"
-            width={24}
-            height={24}
-            className="h-6 w-6"
-            priority
-          />
-          <div className="flex items-center space-x-1">
-            <span className="text-xl font-bold">
-              {baseWithTables?.name ?? "Untitled Base"}
-            </span>
-          </div>
-        </div>
-        <div className="relative ml-auto flex items-center space-x-4">
-          {/* ...other header items... */}
-          {session?.user?.image && (
-            <div className="relative">
-              <button
-                onClick={() => setShowProfileMenu((v) => !v)}
-                className="focus:outline-none"
-              >
-                <Image
-                  src={session.user.image}
-                  alt="Profile"
-                  width={32}
-                  height={32}
-                  className="h-8 w-8 rounded-full border-2 border-white shadow"
-                />
-              </button>
-              {/* Profile Menu Popup */}
-              {showProfileMenu && (
-                <div className="absolute right-0 z-50 mt-2 w-40 rounded bg-white py-2 shadow-lg">
-                  <button
-                    onClick={handleSignOut}
-                    className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
-                  >
-                    Sign out
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+      <BaseHeader
+        baseName={baseWithTables?.name ?? "Untitled Base"}
+        userImage={session?.user?.image ?? undefined}
+        onSignOut={handleSignOut}
+        showProfileMenu={showProfileMenu}
+        setShowProfileMenu={setShowProfileMenu}
+        baseColorClass={getBaseColor}
+      />
       {/* =============================
           Secondary Header / Actions
       ============================= */}
@@ -1625,58 +1585,24 @@ const AirtableClone = () => {
           getSecondaryBaseColor ?? "bg-purple-600"
         }`}
       >
-        <div className="flex w-full items-center space-x-4">
-          {/* Horizontally scrollable table tabs */}
-          <div className="min-w-0 flex-1">
-            <div className="scrollbar-thin table-tabs-scrollbar overflow-x-auto">
-              <div
-                className="flex min-w-max items-center space-x-1 py-1"
-                style={{ WebkitOverflowScrolling: "touch" }}
-              >
-                {baseWithTables?.tables?.map((table) => (
-                  <button
-                    key={table.id}
-                    onClick={() => {
-                      setActiveTableId(table.id);
-                      setSorts([]);
-                      setTextFilters([]);
-                      setNumberFilters([]);
-                      setSearchTerm("");
-                      setShowSort(false);
-                      // Remove localStorage persistence for sorts/filters when switching tables
-                    }}
-                    className={`rounded px-3 py-1 text-sm font-medium ${
-                      activeTableId === table.id
-                        ? "bg-white bg-opacity-20 text-white"
-                        : "text-white hover:bg-white hover:bg-opacity-10"
-                    }`}
-                  >
-                    {table.name.length > 30
-                      ? table.name.slice(0, 30) + "..."
-                      : table.name}
-                  </button>
-                ))}
-                {/* Add Table Button */}
-                <button
-                  ref={addTableButtonRef}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (showAddTableModal) {
-                      setShowAddTableModal(false);
-                      setNewTableName("");
-                    } else {
-                      setShowAddTableModal(true);
-                    }
-                  }}
-                  className="flex items-center gap-1 rounded px-3 py-1 text-sm font-medium text-white hover:bg-white hover:bg-opacity-10"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Table
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <TableTabsBar
+          tables={baseWithTables?.tables ?? []}
+          activeTableId={activeTableId}
+          onTableSelect={(id) => {
+            setActiveTableId(id);
+            setSorts([]);
+            setTextFilters([]);
+            setNumberFilters([]);
+            setSearchTerm("");
+            setShowSort(false);
+          }}
+          onAddTable={() => setShowAddTableModal(true)}
+          showAddTableModal={showAddTableModal}
+          setShowAddTableModal={setShowAddTableModal}
+          newTableName={newTableName}
+          setNewTableName={setNewTableName}
+          addTableButtonRef={addTableButtonRef}
+        />
       </div>
       {/* =============================
           Controls Bar: Sort, Filter, Search
