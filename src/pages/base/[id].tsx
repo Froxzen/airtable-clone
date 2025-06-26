@@ -1755,7 +1755,7 @@ const AirtableClone = () => {
               <GridViewTabsBar
                 gridViews={[]}
                 selectedGridViewId={selectedGridViewId}
-                onSelectGridView={() => {}}
+                onSelectGridView={handleSelectGridView}
                 showAddGridViewPopup={showAddGridViewPopup}
                 handleShowAddGridViewPopup={handleShowAddGridViewPopup}
                 addGridViewButtonRef={addGridViewButtonRef}
