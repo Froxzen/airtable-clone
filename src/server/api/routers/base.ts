@@ -69,7 +69,6 @@ export const baseRouter = createTRPCRouter({
         },
       });
 
-      // 2. Create default table
       const table = await ctx.prisma.table.create({
         data: {
           name: "Table 1",
@@ -77,7 +76,6 @@ export const baseRouter = createTRPCRouter({
         },
       });
 
-      // 2b. Create default grid view for the table
       await ctx.prisma.gridView.create({
         data: {
           tableId: table.id,
@@ -254,20 +252,6 @@ export const baseRouter = createTRPCRouter({
 
       return column;
     }),
-
-  updateColumn: protectedProcedure
-    .input(
-      z.object({
-        columnId: z.string(),
-        name: z.string().min(1),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.column.update({
-        where: { id: input.columnId },
-        data: { name: input.name },
-      });
-    }),
   addRow: protectedProcedure
     .input(
       z.object({
@@ -276,8 +260,6 @@ export const baseRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // Find all columns for this table
-      // (No need to build sqlCols for create, only for update if you have dynamic columns in your schema)
       return ctx.prisma.row.create({
         data: {
           tableId: input.tableId,
@@ -344,7 +326,7 @@ export const baseRouter = createTRPCRouter({
       z.object({
         tableId: z.string(),
         limit: z.number(),
-        cursor: z.string().nullish(), // cursor can be a string or null
+        cursor: z.string().nullish(),
         searchTerm: z.string().optional(),
         filters: z.array(filterSchema).optional(),
         sortConfig: z.array(sortSchema).optional(),
@@ -674,14 +656,6 @@ export const baseRouter = createTRPCRouter({
           filter: input.filter ?? [],
           sort: input.sort ?? [],
         },
-      });
-    }),
-
-  deleteGridView: protectedProcedure
-    .input(z.object({ id: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.gridView.delete({
-        where: { id: input.id },
       });
     }),
 });
