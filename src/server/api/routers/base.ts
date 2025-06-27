@@ -477,7 +477,7 @@ export const baseRouter = createTRPCRouter({
       let rows: RowWithData[] = [];
       if (sortConfig && sortConfig.length > 0) {
         // If sorting is requested, fetch all filtered rows (up to a safe max)
-        const fetchLimit = 1000010; // You can adjust this limit as needed
+        const fetchLimit = 1000010; 
         const rowsRaw = await ctx.prisma.row.findMany({
           where,
           select: {
@@ -486,7 +486,6 @@ export const baseRouter = createTRPCRouter({
             data: true,
           },
           orderBy: [{ id: "asc" }], // deterministic order for slicing
-          // Do NOT use cursor/take here, we paginate after sorting
           take: fetchLimit,
         });
         rows = rowsRaw.map((row) => ({

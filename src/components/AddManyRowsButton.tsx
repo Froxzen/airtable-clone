@@ -51,10 +51,8 @@ const AddManyRowsButton: React.FC<AddManyRowsButtonProps> = ({
       }
       setTimeout(() => setProgress(0), 1000); // Reset after short delay
     } catch (error) {
-      // Error already logged in onError
       setProgress(0);
     } finally {
-      // Notify parent that we're done creating many rows
       onCreationStateChange?.(false);
     }
   };

@@ -18,7 +18,6 @@ import {
   Trash2,
 } from "lucide-react";
 import { Bars3BottomLeftIcon, HashtagIcon } from "@heroicons/react/24/outline";
-import Image from "next/image";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { type Prisma } from "@prisma/client";
 import { type Sort, type Column } from "~/types";
@@ -30,6 +29,7 @@ import SearchBar from "../../components/SearchBar";
 import BaseHeader from "../../components/BaseHeader";
 import TableTabsBar from "../../components/TableTabsBar";
 import GridViewTabsBar from "../../components/GridViewTabsBar";
+import AddColumnPopup from "../../components/AddColumnPopup";
 
 const AirtableClone = () => {
   // =============================
@@ -181,14 +181,27 @@ const AirtableClone = () => {
   // Handler to create a new grid view
   const handleCreateGridView = () => {
     if (!activeTableId || !newGridViewName.trim()) return;
-    createGridView.mutate({
-      tableId: activeTableId,
-      name: newGridViewName.trim(),
-      filter: null,
-      sort: null,
-    });
-    setShowAddGridViewPopup(false);
-    setNewGridViewName("");
+    createGridView.mutate(
+      {
+        tableId: activeTableId,
+        name: newGridViewName.trim(),
+        filter: null,
+        sort: null,
+      },
+      {
+        onSuccess: (newGridView) => {
+          // Automatically select the newly created grid view
+          setSelectedGridViewId(newGridView.id);
+          setShowAddGridViewPopup(false);
+          setNewGridViewName("");
+        },
+        onError: () => {
+          // On error, just close the popup
+          setShowAddGridViewPopup(false);
+          setNewGridViewName("");
+        },
+      }
+    );
   };
 
   // Handler to cancel Add Grid View popup
@@ -297,6 +310,7 @@ const AirtableClone = () => {
   const [showAddColumnPopup, setShowAddColumnPopup] = useState(false);
   const addColumnButtonRef = useRef<HTMLButtonElement>(null);
   const addColumnPopupRef = useRef<HTMLDivElement>(null);
+
   const {
     data: infiniteData,
     fetchNextPage,
@@ -423,7 +437,7 @@ const AirtableClone = () => {
     return value.toLowerCase().includes(searchTerm.toLowerCase());
   };
 
-  // Single computed variable that handles filtering and searched
+  // Handles filters and sorting
   const processedRows = useMemo(() => {
     if (!allRows.length) return [];
 
@@ -635,7 +649,7 @@ const AirtableClone = () => {
 
     // If we're creating many rows, fetch next page more aggressively
     const shouldFetchAggressively = isCreatingManyRows;
-    const triggerDistance = shouldFetchAggressively ? 2000 : 1500; // Much more aggressive for smooth scrolling
+    const triggerDistance = shouldFetchAggressively ? 1000 : 500; // Much more aggressive for smooth scrolling
 
     if (
       lastItem.index >= processedRows.length - triggerDistance &&
@@ -742,7 +756,6 @@ const AirtableClone = () => {
     onSuccess: (newTable) => {
       // Refetch the base with tables
       void utils.base.getById.invalidate({ id: baseId });
-      // Switch to the new table
       setActiveTableId(newTable.id);
       setShowAddTableModal(false);
       setNewTableName("");
@@ -1051,7 +1064,7 @@ const AirtableClone = () => {
   // Track last loaded grid view to prevent overwriting local sorts/filters
   const lastLoadedGridViewId = useRef<string | null>(null);
 
-  // Load sorts/filters from backend only when switching grid views
+  // User selects a grid view
   useEffect(() => {
     if (!selectedGridViewId || !gridViewsData) return;
     if (lastLoadedGridViewId.current === selectedGridViewId) return;
@@ -1079,7 +1092,6 @@ const AirtableClone = () => {
   // Save sorts/filters to backend when they change for the current grid view
   const lastSyncedSorts = useRef<string>("");
   const lastSyncedFilters = useRef<string>("");
-
   useEffect(() => {
     if (!selectedGridViewId || !gridViewsData) return;
     const selectedView = gridViewsData.find((v) => v.id === selectedGridViewId);
@@ -1145,63 +1157,13 @@ const AirtableClone = () => {
       ) {
         setShowSort(false);
       }
-
-      if (
-        addColumnPopupRef.current &&
-        !addColumnPopupRef.current.contains(event.target as Node) &&
-        addColumnButtonRef.current &&
-        !addColumnButtonRef.current.contains(event.target as Node)
-      ) {
-        setShowAddColumnPopup(false);
-      }
-
-      if (
-        showAddTableModal &&
-        addTablePopupRef.current &&
-        !addTablePopupRef.current.contains(target) &&
-        addTableButtonRef.current &&
-        !addTableButtonRef.current.contains(target)
-      ) {
-        setShowAddTableModal(false);
-        setNewTableName("");
-      }
-
-      // Grid View Popup
-      if (
-        showAddGridViewPopup &&
-        addGridViewPopupRef.current &&
-        !addGridViewPopupRef.current.contains(target) &&
-        addGridViewButtonRef.current &&
-        !addGridViewButtonRef.current.contains(target)
-      ) {
-        setShowAddGridViewPopup(false);
-        setNewGridViewName("");
-      }
     };
 
     document.addEventListener("mousedown", handleClickOutside);
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [showSort, showAddColumnPopup, showAddTableModal, showAddGridViewPopup]);
-  // Click outside to close Add Table popup
-  useEffect(() => {
-    if (!showAddTableModal) return;
-    function handleClick(event: PointerEvent) {
-      const target = event.target as Node;
-      if (
-        addTablePopupRef.current &&
-        !addTablePopupRef.current.contains(target) &&
-        addTableButtonRef.current &&
-        !addTableButtonRef.current.contains(target)
-      ) {
-        setShowAddTableModal(false);
-        setNewTableName("");
-      }
-    }
-    document.addEventListener("pointerdown", handleClick);
-    return () => document.removeEventListener("pointerdown", handleClick);
-  }, [showAddTableModal]);
+  }, [showSort]);
 
   const handleAddColumn = (type: "TEXT" | "NUMBER") => {
     if (!base || !activeTableId) return;
@@ -1596,12 +1558,18 @@ const AirtableClone = () => {
             setSearchTerm("");
             setShowSort(false);
           }}
-          onAddTable={() => setShowAddTableModal(true)}
+          onAddTable={() => {
+            if (newTableName.trim()) {
+              addTable.mutate({ name: newTableName.trim(), baseId });
+            }
+          }}
           showAddTableModal={showAddTableModal}
           setShowAddTableModal={setShowAddTableModal}
           newTableName={newTableName}
           setNewTableName={setNewTableName}
           addTableButtonRef={addTableButtonRef}
+          addTablePopupRef={addTablePopupRef}
+          baseId={baseId}
         />
       </div>
       {/* =============================
@@ -1759,6 +1727,12 @@ const AirtableClone = () => {
                 showAddGridViewPopup={showAddGridViewPopup}
                 handleShowAddGridViewPopup={handleShowAddGridViewPopup}
                 addGridViewButtonRef={addGridViewButtonRef}
+                newGridViewName={newGridViewName}
+                setNewGridViewName={setNewGridViewName}
+                handleCreateGridView={handleCreateGridView}
+                handleCancelAddGridView={handleCancelAddGridView}
+                addGridViewPopupRef={addGridViewPopupRef}
+                addGridViewPopupPos={addGridViewPopupPos}
               />
               {/* ...other view types can go here... */}
             </div>
@@ -2145,152 +2119,15 @@ const AirtableClone = () => {
       {/* =============================
           Popups/Modals
       ============================= */}
-      {showAddColumnPopup && (
-        // =============================
-        // Add Column Popup
-        // =============================
-        <div
-          ref={addColumnPopupRef}
-          className="absolute z-20 w-56 rounded-md border border-gray-200 bg-white p-2 shadow-lg"
-          style={{
-            top:
-              (addColumnButtonRef.current?.getBoundingClientRect().bottom ??
-                0) + window.scrollY,
-            left:
-              (addColumnButtonRef.current?.getBoundingClientRect().right ?? 0) +
-              window.scrollX,
-            transform: "translateX(-100%)",
-          }}
-        >
-          <input
-            type="text"
-            value={newColumnName}
-            onChange={(e) => setNewColumnName(e.target.value)}
-            placeholder="Column name"
-            className="my-2 w-full rounded border border-gray-300 px-2 py-1.5 text-sm text-gray-800 placeholder-gray-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
-            autoFocus
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && newColumnName.trim()) {
-                e.preventDefault();
-                handleAddColumn("TEXT");
-              }
-            }}
-          />
-          <div className="border-t border-gray-200 pt-2">
-            <div className="mb-1 px-1 text-xs font-semibold text-gray-500">
-              SELECT A FIELD TYPE
-            </div>
-            <button
-              onClick={() => handleAddColumn("TEXT")}
-              className="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={!newColumnName.trim()}
-            >
-              <Bars3BottomLeftIcon className="h-4 w-4" />
-              Text
-            </button>
-            <button
-              onClick={() => handleAddColumn("NUMBER")}
-              className="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={!newColumnName.trim()}
-            >
-              <HashtagIcon className="h-4 w-4" />
-              Number
-            </button>
-          </div>
-        </div>
-      )}
-
-      {showAddTableModal && (
-        // =============================
-        // Add Table Fullscreen Modal
-        // =============================
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-20">
-          <div className="w-full max-w-sm rounded-xl border border-gray-200 bg-white p-6 shadow-xl">
-            <div className="mb-4 text-lg font-semibold text-gray-900">
-              Create Table
-            </div>
-            <input
-              type="text"
-              value={newTableName}
-              onChange={(e) => setNewTableName(e.target.value)}
-              placeholder="Table name"
-              className="mb-6 w-full rounded border border-gray-400 px-4 py-2 text-base text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none"
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && newTableName.trim()) {
-                  e.preventDefault();
-                  addTable.mutate({ name: newTableName.trim(), baseId });
-                }
-              }}
-            />
-            <div className="flex justify-end gap-4">
-              <button
-                onClick={() => setShowAddTableModal(false)}
-                className="rounded px-2 py-1 text-base text-gray-700 hover:bg-gray-100"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  if (newTableName.trim()) {
-                    addTable.mutate({ name: newTableName.trim(), baseId });
-                  }
-                }}
-                className="rounded bg-blue-600 px-6 py-2 text-base font-medium text-white hover:bg-blue-700 disabled:bg-blue-300"
-                disabled={!newTableName.trim()}
-              >
-                Create
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* =============================
-          Add Grid View Popup
-      ============================= */}
-      {showAddGridViewPopup && (
-        <div
-          ref={addGridViewPopupRef}
-          className="absolute z-50 w-72 rounded border border-gray-200 bg-white p-4 shadow-lg"
-          style={{
-            top: addGridViewPopupPos.top,
-            left: addGridViewPopupPos.left,
-            position: "absolute",
-          }}
-        >
-          <input
-            type="text"
-            className="mb-3 w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
-            placeholder="Grid view name"
-            value={newGridViewName}
-            onChange={(e) => setNewGridViewName(e.target.value)}
-            autoFocus
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && newGridViewName.trim()) {
-                e.preventDefault();
-                handleCreateGridView();
-              }
-            }}
-          />
-          <div className="flex justify-end gap-2">
-            <button
-              className="rounded px-3 py-1 text-sm text-gray-600 hover:bg-gray-100"
-              onClick={handleCancelAddGridView}
-              type="button"
-            >
-              Cancel
-            </button>
-            <button
-              className="rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
-              onClick={handleCreateGridView}
-              disabled={!newGridViewName.trim()}
-              type="button"
-            >
-              Create new view
-            </button>
-          </div>
-        </div>
-      )}
+      <AddColumnPopup
+        isOpen={showAddColumnPopup}
+        onClose={() => setShowAddColumnPopup(false)}
+        newColumnName={newColumnName}
+        setNewColumnName={setNewColumnName}
+        onAddColumn={handleAddColumn}
+        addColumnButtonRef={addColumnButtonRef}
+        addColumnPopupRef={addColumnPopupRef}
+      />
       <style jsx global>{`
         .table-tabs-scrollbar::-webkit-scrollbar {
           height: 6px;

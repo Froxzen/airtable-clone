@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef, useEffect } from "react";
 import { Check, Plus, Grid3X3 } from "lucide-react";
 
 interface GridView {
@@ -13,6 +13,13 @@ interface GridViewTabsBarProps {
   showAddGridViewPopup: boolean;
   handleShowAddGridViewPopup: (e: React.MouseEvent<HTMLDivElement>) => void;
   addGridViewButtonRef: React.RefObject<HTMLDivElement>;
+  // Add Grid View popup props
+  newGridViewName: string;
+  setNewGridViewName: (name: string) => void;
+  handleCreateGridView: () => void;
+  handleCancelAddGridView: () => void;
+  addGridViewPopupRef: React.RefObject<HTMLDivElement>;
+  addGridViewPopupPos: { top: number; left: number };
 }
 
 const GridViewTabsBar: React.FC<GridViewTabsBarProps> = ({
@@ -22,21 +29,101 @@ const GridViewTabsBar: React.FC<GridViewTabsBarProps> = ({
   showAddGridViewPopup,
   handleShowAddGridViewPopup,
   addGridViewButtonRef,
+  newGridViewName,
+  setNewGridViewName,
+  handleCreateGridView,
+  handleCancelAddGridView,
+  addGridViewPopupRef,
+  addGridViewPopupPos,
 }) => {
+  // Click outside to close Add Grid View popup
+  useEffect(() => {
+    if (!showAddGridViewPopup) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (
+        addGridViewPopupRef.current &&
+        !addGridViewPopupRef.current.contains(target) &&
+        addGridViewButtonRef.current &&
+        !addGridViewButtonRef.current.contains(target)
+      ) {
+        handleCancelAddGridView();
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [
+    showAddGridViewPopup,
+    handleCancelAddGridView,
+    addGridViewPopupRef,
+    addGridViewButtonRef,
+  ]);
+
   // If gridViews is empty, only render the grid view+ button
   if (!gridViews || gridViews.length === 0) {
     return (
-      <div
-        ref={addGridViewButtonRef}
-        className="flex cursor-pointer items-center justify-between rounded px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
-        onClick={handleShowAddGridViewPopup}
-      >
-        <div className="flex items-center gap-2">
-          <Grid3X3 className="h-4 w-4" />
-          <span>Grid view</span>
+      <>
+        <div
+          ref={addGridViewButtonRef}
+          className="flex cursor-pointer items-center justify-between rounded px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
+          onClick={handleShowAddGridViewPopup}
+        >
+          <div className="flex items-center gap-2">
+            <Grid3X3 className="h-4 w-4" />
+            <span>Grid view</span>
+          </div>
+          <Plus className="h-4 w-4" />
         </div>
-        <Plus className="h-4 w-4" />
-      </div>
+
+        {/* Add Grid View Popup */}
+        {showAddGridViewPopup && (
+          <div
+            ref={addGridViewPopupRef}
+            className="absolute z-50 w-72 rounded border border-gray-200 bg-white p-4 shadow-lg"
+            style={{
+              top: addGridViewPopupPos.top,
+              left: addGridViewPopupPos.left,
+              position: "absolute",
+            }}
+          >
+            <input
+              type="text"
+              className="mb-3 w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
+              placeholder="Grid view name"
+              value={newGridViewName}
+              onChange={(e) => setNewGridViewName(e.target.value)}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && newGridViewName.trim()) {
+                  e.preventDefault();
+                  handleCreateGridView();
+                }
+              }}
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                className="rounded px-3 py-1 text-sm text-gray-600 hover:bg-gray-100"
+                onClick={handleCancelAddGridView}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+                onClick={handleCreateGridView}
+                disabled={!newGridViewName.trim()}
+                type="button"
+              >
+                Create new view
+              </button>
+            </div>
+          </div>
+        )}
+      </>
     );
   }
 
@@ -108,6 +195,51 @@ const GridViewTabsBar: React.FC<GridViewTabsBarProps> = ({
         </div>
         <Plus className="h-4 w-4" />
       </div>
+
+      {/* Add Grid View Popup */}
+      {showAddGridViewPopup && (
+        <div
+          ref={addGridViewPopupRef}
+          className="absolute z-50 w-72 rounded border border-gray-200 bg-white p-4 shadow-lg"
+          style={{
+            top: addGridViewPopupPos.top,
+            left: addGridViewPopupPos.left,
+            position: "absolute",
+          }}
+        >
+          <input
+            type="text"
+            className="mb-3 w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
+            placeholder="Grid view name"
+            value={newGridViewName}
+            onChange={(e) => setNewGridViewName(e.target.value)}
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && newGridViewName.trim()) {
+                e.preventDefault();
+                handleCreateGridView();
+              }
+            }}
+          />
+          <div className="flex justify-end gap-2">
+            <button
+              className="rounded px-3 py-1 text-sm text-gray-600 hover:bg-gray-100"
+              onClick={handleCancelAddGridView}
+              type="button"
+            >
+              Cancel
+            </button>
+            <button
+              className="rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+              onClick={handleCreateGridView}
+              disabled={!newGridViewName.trim()}
+              type="button"
+            >
+              Create new view
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 };
